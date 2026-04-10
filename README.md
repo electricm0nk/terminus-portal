@@ -2,7 +2,7 @@
 
 Static dashboard portal for the Trantor + Fourdogs home lab — served via nginx on k3s.
 
-Accessible at: `https://portal.terminus.internal`
+Accessible at: `https://portal.trantor.internal`
 
 ## Stack
 
