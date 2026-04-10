@@ -14,7 +14,7 @@ service:
 ingress:
   enabled: true
   className: traefik
-  host: portal.trantor.internal
+  host: portal.terminus.internal
   tls: []
 
 resources:
