@@ -1,0 +1,30 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/electricm0nk/terminus-portal
+  pullPolicy: IfNotPresent
+  tag: ""  # defaults to chart appVersion
+  pullSecrets:
+    - name: ghcr-pull-secret
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: traefik
+  host: portal.trantor.internal
+  tls: []
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

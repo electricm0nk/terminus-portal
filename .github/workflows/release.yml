@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image tags
+        id: meta
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "sha_tag=ghcr.io/electricm0nk/terminus-portal:sha-${SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "latest_tag=ghcr.io/electricm0nk/terminus-portal:latest" >> $GITHUB_OUTPUT
+          echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.latest_tag }}
+
+      - name: Print image digest
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **SHA tag** | \`${{ steps.meta.outputs.sha_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Latest tag** | \`${{ steps.meta.outputs.latest_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Digest** | \`${{ steps.build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY

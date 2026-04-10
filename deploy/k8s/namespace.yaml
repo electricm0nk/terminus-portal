@@ -1,0 +1,17 @@
+---
+# namespace.yaml — terminus-portal k8s namespace
+#
+# Isolates the portal from other terminus namespaces.
+# Sync wave 1 — must exist before Helm deployment sync.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: terminus-portal
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: terminus-portal
+    terminus.io/domain: terminus
+    terminus.io/service: portal
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
