@@ -142,5 +142,5 @@ jobs:
             --task-queue terminus-platform \
             --type ReleaseWorkflow \
             --workflow-id "release-${SERVICE}-${ENV}-${SHA:0:8}" \
-            --id-reuse-policy ALLOW_DUPLICATE_FAILED_ONLY \
+            --id-reuse-policy AllowDuplicateFailedOnly \
             --input "{\"ServiceName\":\"${SERVICE}\",\"Environment\":\"${ENV}\",\"ProvisionDB\":false,\"ImageTag\":\"${SHA}\"}"
