@@ -4,6 +4,20 @@ on:
   pull_request:
     types: [closed]
     branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Base branch context to release (develop=dev, main=prod)
+        required: true
+        default: develop
+        type: choice
+        options:
+          - develop
+          - main
+      image_sha:
+        description: Optional override for image SHA/tag
+        required: false
+        type: string
 
 concurrency:
   group: release-terminus-portal-${{ github.base_ref }}
@@ -11,17 +25,19 @@ concurrency:
 
 jobs:
   resolve:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
       env: ${{ steps.map.outputs.env }}
       values_file: ${{ steps.map.outputs.values_file }}
       infra_branch: ${{ steps.map.outputs.infra_branch }}
+      release_sha: ${{ steps.map.outputs.release_sha }}
     steps:
       - name: Map branch to release context
         id: map
         run: |
-          if [[ "${{ github.base_ref }}" == "main" ]]; then
+          BASE_REF="${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.base_ref }}"
+          if [[ "${BASE_REF}" == "main" ]]; then
             echo "env=prod" >> "$GITHUB_OUTPUT"
             echo "values_file=values.yaml" >> "$GITHUB_OUTPUT"
             echo "infra_branch=main" >> "$GITHUB_OUTPUT"
@@ -31,17 +47,26 @@ jobs:
             echo "infra_branch=main" >> "$GITHUB_OUTPUT"
           fi
 
+          if [[ -n "${{ inputs.image_sha || '' }}" ]]; then
+            echo "release_sha=${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${BASE_REF}" == "main" ]]; then
+            echo "release_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-push:
     needs: resolve
-    if: needs.resolve.outputs.env == 'dev'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     env:
-      SHA: ${{ github.sha }}
+      SHA: ${{ needs.resolve.outputs.release_sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -62,12 +87,12 @@ jobs:
     if: |
       always() &&
       needs.resolve.result == 'success' &&
-      (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
+      needs.build-and-push.result == 'success'
     runs-on: [self-hosted, trantor-internal]
     env:
       SERVICE: terminus-portal
       ENV: ${{ needs.resolve.outputs.env }}
-      SHA: ${{ github.base_ref == 'main' && github.event.pull_request.head.sha || github.sha }}
+      SHA: ${{ needs.resolve.outputs.release_sha }}
       INFRA_BRANCH: ${{ needs.resolve.outputs.infra_branch }}
       VALUES_FILE: ${{ needs.resolve.outputs.values_file }}
     steps:
@@ -77,13 +102,6 @@ jobs:
           [[ -n "${SHA}" ]] || { echo "::error::sha is empty"; exit 1; }
           [[ -n "${INFRA_BRANCH}" ]] || { echo "::error::infra_branch is empty"; exit 1; }
           [[ -n "${INFRA_DEPLOY_KEY:-}" ]] || { echo "::error::INFRA_DEPLOY_KEY is empty on runner"; exit 1; }
-
-      - name: Validate prod artifact exists in GHCR
-        if: env.ENV == 'prod'
-        run: |
-          curl -fsSI \
-            -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
-            "https://ghcr.io/v2/electricm0nk/terminus-portal/manifests/${SHA}" >/dev/null
 
       - name: Promote manifest in terminus.infra
         run: |
