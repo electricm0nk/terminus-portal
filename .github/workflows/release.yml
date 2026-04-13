@@ -1,72 +1,41 @@
+# release.yml — Terminus Portal Release Pipeline
+#
+# Fires when a PR is merged to `develop` (dev release) or `main` (production release).
+# Job 1 (cloud runner): builds and pushes the Docker image to GHCR.
+# Job 2 (self-hosted k3s runner): promotes the image tag to terminus.infra and starts
+# the Temporal ReleaseWorkflow, which gates the ArgoCD sync and smoke test.
+#
+# Required secrets:
+#   INFRA_DEPLOY_KEY — GitHub deploy key with write access to terminus.infra repo
+#
+# Semaphore project 3 (terminus-infra) activity templates called by Temporal:
+#   seed-terminus-portal-secrets    → no-op GHCR prerequisite check
+#   verify-terminus-portal-deploy   → smoke test (prod)
+#   verify-terminus-portal-dev-deploy → smoke test (dev)
+
 name: Release
 
 on:
   pull_request:
     types: [closed]
     branches: [develop, main]
-  workflow_dispatch:
-    inputs:
-      target_branch:
-        description: Base branch context to release (develop=dev, main=prod)
-        required: true
-        default: develop
-        type: choice
-        options:
-          - develop
-          - main
-      image_sha:
-        description: Optional override for image SHA/tag
-        required: false
-        type: string
 
-concurrency:
-  group: release-terminus-portal-${{ github.base_ref }}
-  cancel-in-progress: false
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  resolve:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+  build-and-push:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
-      env: ${{ steps.map.outputs.env }}
-      values_file: ${{ steps.map.outputs.values_file }}
-      infra_branch: ${{ steps.map.outputs.infra_branch }}
-      release_sha: ${{ steps.map.outputs.release_sha }}
-    steps:
-      - name: Map branch to release context
-        id: map
-        run: |
-          BASE_REF="${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.base_ref }}"
-          if [[ "${BASE_REF}" == "main" ]]; then
-            echo "env=prod" >> "$GITHUB_OUTPUT"
-            echo "values_file=values.yaml" >> "$GITHUB_OUTPUT"
-            echo "infra_branch=main" >> "$GITHUB_OUTPUT"
-          else
-            echo "env=dev" >> "$GITHUB_OUTPUT"
-            echo "values_file=values-dev.yaml" >> "$GITHUB_OUTPUT"
-            echo "infra_branch=main" >> "$GITHUB_OUTPUT"
-          fi
-
-          if [[ -n "${{ inputs.image_sha || '' }}" ]]; then
-            echo "release_sha=${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${BASE_REF}" == "main" ]]; then
-            echo "release_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "release_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          fi
-
-  build-and-push:
-    needs: resolve
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    env:
-      SHA: ${{ needs.resolve.outputs.release_sha }}
+      sha: ${{ steps.meta.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.SHA }}
+
+      - name: Extract short SHA
+        id: meta
+        run: echo "sha=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -75,72 +44,57 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push SHA-tagged image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/electricm0nk/terminus-portal:${{ env.SHA }}
+          # Full SHA tag used by Temporal ImageTag; latest kept for manual pulls
+          tags: |
+            ghcr.io/electricm0nk/terminus-portal:${{ github.sha }}
+            ghcr.io/electricm0nk/terminus-portal:latest
 
   promote-and-release:
-    needs: [resolve, build-and-push]
-    if: |
-      always() &&
-      needs.resolve.result == 'success' &&
-      needs.build-and-push.result == 'success'
+    needs: build-and-push
     runs-on: [self-hosted, trantor-internal]
-    env:
-      SERVICE: terminus-portal
-      ENV: ${{ needs.resolve.outputs.env }}
-      SHA: ${{ needs.resolve.outputs.release_sha }}
-      INFRA_BRANCH: ${{ needs.resolve.outputs.infra_branch }}
-      VALUES_FILE: ${{ needs.resolve.outputs.values_file }}
     steps:
-      - name: Validate resolved inputs
+      - name: Determine environment
+        id: env
         run: |
-          [[ -n "${ENV}" ]] || { echo "::error::env is empty"; exit 1; }
-          [[ -n "${SHA}" ]] || { echo "::error::sha is empty"; exit 1; }
-          [[ -n "${INFRA_BRANCH}" ]] || { echo "::error::infra_branch is empty"; exit 1; }
-          [[ -n "${INFRA_DEPLOY_KEY:-}" ]] || { echo "::error::INFRA_DEPLOY_KEY is empty on runner"; exit 1; }
-
-      - name: Promote manifest in terminus.infra
-        run: |
-          git clone https://x-access-token:${INFRA_DEPLOY_KEY}@github.com/electricm0nk/terminus.infra.git
-          cd terminus.infra
-          git config user.email "ci@trantor.internal"
-          git config user.name "Terminus CI"
-
-          VALUES_PATH="platforms/k3s/helm/${SERVICE}/${VALUES_FILE}"
-          git fetch origin
-          git checkout "${INFRA_BRANCH}"
-          git reset --hard "origin/${INFRA_BRANCH}"
-
-          sed -i "s/^  tag:.*/  tag: ${SHA}/" "${VALUES_PATH}"
-
-          git add "${VALUES_PATH}"
-          if git diff --cached --quiet; then
-            echo "No values change detected; continuing to Temporal release"
+          if [[ "${{ github.base_ref }}" == "main" ]]; then
+            echo "env=prod" >> $GITHUB_OUTPUT
+            echo "values_file=values.yaml" >> $GITHUB_OUTPUT
           else
-            git commit -m "chore(release): promote ${SERVICE}:${SHA:0:8} to ${ENV}"
-            git push origin "${INFRA_BRANCH}"
+            echo "env=dev" >> $GITHUB_OUTPUT
+            echo "values_file=values-dev.yaml" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install kubectl on self-hosted runner
+      - name: Promote image tag in terminus.infra
         run: |
-          mkdir -p "${RUNNER_TEMP}/bin"
-          curl -fsSL -o "${RUNNER_TEMP}/bin/kubectl" \
-            https://dl.k8s.io/release/v1.32.3/bin/linux/amd64/kubectl
-          chmod +x "${RUNNER_TEMP}/bin/kubectl"
-          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
+          # INFRA_DEPLOY_KEY is injected as an environment variable by the k3s runner pod
+          # (actions-runner-infra-deploy-key secret in actions-runner namespace)
+          git clone https://x-access-token:${INFRA_DEPLOY_KEY}@github.com/electricm0nk/terminus.infra.git
+          cd terminus.infra
+          git checkout main
+          sed -i "s/tag:.*/tag: ${{ github.sha }}/" platforms/k3s/helm/terminus-portal/${{ steps.env.outputs.values_file }}
+          git config user.email "ci@trantor.internal"
+          git config user.name "Terminus CI"
+          git add platforms/k3s/helm/terminus-portal/${{ steps.env.outputs.values_file }}
+          git commit -m "chore(release): promote terminus-portal:${{ needs.build-and-push.outputs.sha }} to ${{ steps.env.outputs.env }}"
+          git push
 
       - name: Start Temporal ReleaseWorkflow
         run: |
-          kubectl exec -n temporal deploy/temporal-server-admintools -- \
-            /usr/local/bin/temporal workflow start \
+          # Download temporal CLI (runner pod has no kubectl; direct gRPC is cleaner)
+          curl -sL "https://temporal.download/cli/archive/latest?platform=linux&arch=amd64" \
+            -o /tmp/temporal.tar.gz
+          tar -xzf /tmp/temporal.tar.gz -C /tmp/
+          chmod +x /tmp/temporal
+          /tmp/temporal workflow start \
             --address 10.43.29.119:7233 \
             --namespace default \
             --task-queue terminus-platform \
             --type ReleaseWorkflow \
-            --workflow-id "release-${SERVICE}-${ENV}-${SHA:0:8}" \
+            --workflow-id "release-terminus-portal-${{ steps.env.outputs.env }}-${{ needs.build-and-push.outputs.sha }}" \
             --id-reuse-policy AllowDuplicateFailedOnly \
-            --input "{\"ServiceName\":\"${SERVICE}\",\"Environment\":\"${ENV}\",\"ProvisionDB\":false,\"ImageTag\":\"${SHA}\"}"
+            --input '{"ServiceName":"terminus-portal","Environment":"${{ steps.env.outputs.env }}","ProvisionDB":false,"ImageTag":"${{ github.sha }}"}'

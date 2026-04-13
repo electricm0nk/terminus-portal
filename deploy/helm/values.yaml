@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/electricm0nk/terminus-portal
   pullPolicy: IfNotPresent
-  tag: ""  # defaults to chart appVersion
+  tag: "latest"  # CI overrides with GITHUB_SHA on merge
   pullSecrets:
     - name: ghcr-pull-secret
 
