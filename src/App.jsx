@@ -64,6 +64,10 @@ function App() {
     checkAllServices();
   }, [checkAllServices]);
 
+  const totalCount = SERVICES.filter((s) => s.healthCheck.enabled).length;
+  const onlineCount = Object.values(statusMap).filter((s) => s === STATUS.ONLINE).length;
+  const unreachableCount = Object.values(statusMap).filter((s) => s === STATUS.UNREACHABLE).length;
+
   return (
     <div className="app" style={{ background: tokens.bg, color: tokens.text, minHeight: '100vh' }}>
       {tokens.scanlines && (
@@ -83,7 +87,13 @@ function App() {
           }}
         />
       )}
-      <Header />
+      <Header
+        onlineCount={onlineCount}
+        totalCount={totalCount}
+        unreachableCount={unreachableCount}
+        lastChecked={lastChecked}
+        isPolling={isPolling}
+      />
       <ThemeToggle />
       <RefreshButton onRefresh={handleRefresh} isPolling={isPolling} />
       <ServiceGrid services={SERVICES} statusMap={statusMap} />
