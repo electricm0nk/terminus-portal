@@ -1,8 +1,12 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
+import StatusIndicator from './StatusIndicator.jsx';
+import { STATUS } from '../constants/status.js';
 
-export default function ServiceCard({ service, status = null }) {
+export default function ServiceCard({ service, status }) {
   const { tokens } = useTheme();
+  const resolvedStatus =
+    status !== undefined ? status : service.enabled ? STATUS.CHECKING : STATUS.NO_CHECK;
 
   const cardStyle = {
     background: tokens.bgCard,
@@ -31,7 +35,7 @@ export default function ServiceCard({ service, status = null }) {
       <span style={{ color: tokens.textMuted, fontSize: '0.75rem' }}>
         {service.category.toUpperCase()}
       </span>
-      {status !== null ? status : null}
+      <StatusIndicator status={resolvedStatus} />
     </>
   );
 
