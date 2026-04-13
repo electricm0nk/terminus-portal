@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
+import RefreshButton from './components/RefreshButton.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import { SERVICES } from './config/services.js';
 import { STATUS } from './constants/status.js';
@@ -53,6 +54,15 @@ function App() {
     return () => clearInterval(id);
   }, [checkAllServices]);
 
+  const handleRefresh = useCallback(() => {
+    const checkingMap = SERVICES.reduce((acc, s) => {
+      acc[s.id] = s.healthCheck.enabled ? STATUS.CHECKING : STATUS.NO_CHECK;
+      return acc;
+    }, {});
+    setStatusMap(checkingMap);
+    checkAllServices();
+  }, [checkAllServices]);
+
   return (
     <div className="app" style={{ background: tokens.bg, color: tokens.text, minHeight: '100vh' }}>
       {tokens.scanlines && (
@@ -73,6 +83,7 @@ function App() {
         />
       )}
       <ThemeToggle />
+      <RefreshButton onRefresh={handleRefresh} isPolling={isPolling} />
       <ServiceGrid services={SERVICES} statusMap={statusMap} />
     </div>
   );
