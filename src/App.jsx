@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
-import ThemeToggle from './components/ThemeToggle.jsx';
-import RefreshButton from './components/RefreshButton.jsx';
+import Header from './components/Header.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import { SERVICES } from './config/services.js';
 import { STATUS } from './constants/status.js';
@@ -63,6 +62,10 @@ function App() {
     checkAllServices();
   }, [checkAllServices]);
 
+  const totalCount = SERVICES.filter((s) => s.healthCheck.enabled).length;
+  const onlineCount = Object.values(statusMap).filter((s) => s === STATUS.ONLINE).length;
+  const unreachableCount = Object.values(statusMap).filter((s) => s === STATUS.UNREACHABLE).length;
+
   return (
     <div className="app" style={{ background: tokens.bg, color: tokens.text, minHeight: '100vh' }}>
       {tokens.scanlines && (
@@ -82,8 +85,14 @@ function App() {
           }}
         />
       )}
-      <ThemeToggle />
-      <RefreshButton onRefresh={handleRefresh} isPolling={isPolling} />
+      <Header
+        onlineCount={onlineCount}
+        totalCount={totalCount}
+        unreachableCount={unreachableCount}
+        lastChecked={lastChecked}
+        isPolling={isPolling}
+        onRefresh={handleRefresh}
+      />
       <ServiceGrid services={SERVICES} statusMap={statusMap} />
     </div>
   );
