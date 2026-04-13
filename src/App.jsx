@@ -1,12 +1,14 @@
 import React from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
+import ServiceGrid from './components/ServiceGrid.jsx';
+import { SERVICES } from './config/services.js';
 
 function App() {
   const { tokens } = useTheme();
 
   return (
-    <div className="app">
+    <div className="app" style={{ background: tokens.bg, color: tokens.text, minHeight: '100vh' }}>
       {tokens.scanlines && (
         <div
           className="scanlines-overlay"
@@ -25,7 +27,7 @@ function App() {
         />
       )}
       <ThemeToggle />
-      <p>Terminus Portal</p>
+      <ServiceGrid services={SERVICES} statusMap={{}} />
     </div>
   );
 }
