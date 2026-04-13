@@ -71,7 +71,9 @@ jobs:
 
       - name: Promote image tag in terminus.infra
         run: |
-          git clone https://x-access-token:${{ secrets.INFRA_DEPLOY_KEY }}@github.com/electricm0nk/terminus.infra.git
+          # INFRA_DEPLOY_KEY is injected as an environment variable by the k3s runner pod
+          # (actions-runner-infra-deploy-key secret in actions-runner namespace)
+          git clone https://x-access-token:${INFRA_DEPLOY_KEY}@github.com/electricm0nk/terminus.infra.git
           cd terminus.infra
           git checkout main
           sed -i "s/tag:.*/tag: ${{ github.sha }}/" platforms/k3s/helm/terminus-portal/${{ steps.env.outputs.values_file }}
