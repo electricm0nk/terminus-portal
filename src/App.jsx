@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
+import Header from './components/Header.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import RefreshButton from './components/RefreshButton.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
@@ -82,6 +83,7 @@ function App() {
           }}
         />
       )}
+      <Header />
       <ThemeToggle />
       <RefreshButton onRefresh={handleRefresh} isPolling={isPolling} />
       <ServiceGrid services={SERVICES} statusMap={statusMap} />
