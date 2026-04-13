@@ -1,0 +1,63 @@
+import React from 'react';
+import { useTheme } from '../context/ThemeContext.jsx';
+
+export default function ServiceCard({ service, status = null }) {
+  const { tokens } = useTheme();
+
+  const cardStyle = {
+    background: tokens.bgCard,
+    border: `1px solid ${tokens.border}`,
+    padding: '1rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+    fontFamily: tokens.fontFamily,
+    color: tokens.text,
+    textDecoration: 'none',
+  };
+
+  const content = (
+    <>
+      {service.iconSlug ? (
+        <img
+          src={`https://cdn.simpleicons.org/${service.iconSlug}`}
+          alt={service.name}
+          width={24}
+          height={24}
+        />
+      ) : null}
+      <strong style={{ color: tokens.accent }}>{service.name}</strong>
+      <span style={{ color: tokens.textMuted, fontSize: '0.85rem' }}>{service.description}</span>
+      <span style={{ color: tokens.textMuted, fontSize: '0.75rem' }}>
+        {service.category.toUpperCase()}
+      </span>
+      {status !== null ? status : null}
+    </>
+  );
+
+  if (!service.enabled) {
+    return (
+      <div
+        data-testid={`service-card-${service.id}`}
+        tabIndex={-1}
+        style={{ ...cardStyle, opacity: 0.5 }}
+      >
+        {content}
+        <span style={{ color: tokens.textMuted, fontSize: '0.75rem' }}>PENDING</span>
+      </div>
+    );
+  }
+
+  return (
+    <a
+      data-testid={`service-card-${service.id}`}
+      href={service.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={service.name}
+      style={cardStyle}
+    >
+      {content}
+    </a>
+  );
+}
