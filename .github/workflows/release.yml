@@ -85,13 +85,18 @@ jobs:
 
       - name: Start Temporal ReleaseWorkflow
         run: |
-          kubectl exec -n temporal \
-            $(kubectl get pod -n temporal -l app=temporal-admintools -o jsonpath='{.items[0].metadata.name}') -- \
-            /usr/local/bin/temporal workflow start \
+          # Download temporal CLI (runner pod has no kubectl; direct gRPC is cleaner)
+          curl -sL "https://temporal.download/cli/archive/latest?platform=linux&arch=amd64" \
+            -o /tmp/temporal.tar.gz
+          tar -xzf /tmp/temporal.tar.gz -C /tmp/
+          chmod +x /tmp/temporal
+          /tmp/temporal workflow start \
             --address 10.43.29.119:7233 \
             --namespace default \
             --task-queue terminus-platform \
             --type ReleaseWorkflow \
             --workflow-id "release-terminus-portal-${{ steps.env.outputs.env }}-${{ needs.build-and-push.outputs.sha }}" \
+            --id-reuse-policy ALLOW_DUPLICATE_FAILED_ONLY \
+            --input '{"ServiceName":"terminus-portal","Environment":"${{ steps.env.outputs.env }}","ProvisionDB":false,"ImageTag":"${{ github.sha }}"}'
             --id-reuse-policy ALLOW_DUPLICATE_FAILED_ONLY \
             --input '{"ServiceName":"terminus-portal","Environment":"${{ steps.env.outputs.env }}","ProvisionDB":false,"ImageTag":"${{ github.sha }}"}'
