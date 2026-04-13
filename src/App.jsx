@@ -70,6 +70,7 @@ function App() {
 
   return (
     <div className="app" style={{ background: tokens.bg, color: tokens.text, minHeight: '100vh' }}>
+      <style>{`:focus-visible { outline: 2px solid ${tokens.borderActive} !important; outline-offset: 2px; }`}</style>
       {tokens.scanlines && (
         <div
           className="scanlines-overlay"
