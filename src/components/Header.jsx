@@ -32,6 +32,23 @@ export default function Header({
           trantor · hintzmann.net · k3s
         </div>
       </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem', fontSize: '0.8rem' }}>
+        {isPolling && onlineCount === 0 ? (
+          <span style={{ color: tokens.textMuted }}>Checking...</span>
+        ) : totalCount > 0 ? (
+          <span style={{ color: tokens.accent }}>
+            {onlineCount}/{totalCount} ONLINE
+          </span>
+        ) : null}
+        {unreachableCount > 0 && (
+          <span style={{ color: tokens.statusUnreachable }}>{unreachableCount} UNREACHABLE</span>
+        )}
+        {lastChecked && (
+          <span style={{ color: tokens.textMuted }}>
+            Last checked: {lastChecked.toLocaleTimeString()}
+          </span>
+        )}
+      </div>
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
         {/* Controls slot — filled in Story 5.3 */}
       </div>
