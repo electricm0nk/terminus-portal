@@ -96,7 +96,7 @@ jobs:
             --task-queue terminus-platform \
             --type ReleaseWorkflow \
             --workflow-id "release-terminus-portal-${{ steps.env.outputs.env }}-${{ needs.build-and-push.outputs.sha }}" \
-            --id-reuse-policy ALLOW_DUPLICATE_FAILED_ONLY \
+            --id-reuse-policy AllowDuplicateFailedOnly \
             --input '{"ServiceName":"terminus-portal","Environment":"${{ steps.env.outputs.env }}","ProvisionDB":false,"ImageTag":"${{ github.sha }}"}'
             --id-reuse-policy ALLOW_DUPLICATE_FAILED_ONLY \
             --input '{"ServiceName":"terminus-portal","Environment":"${{ steps.env.outputs.env }}","ProvisionDB":false,"ImageTag":"${{ github.sha }}"}'
