@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
 import Header from './components/Header.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
+import MetricsPanel from './components/MetricsPanel.jsx';
 import { SERVICES } from './config/services.js';
+import { METRICS } from './config/metrics.js';
 import { STATUS } from './constants/status.js';
 
 function buildInitialStatusMap() {
@@ -94,6 +96,7 @@ function App() {
         onRefresh={handleRefresh}
       />
       <ServiceGrid services={SERVICES} statusMap={statusMap} />
+      <MetricsPanel metrics={METRICS} />
     </div>
   );
 }
