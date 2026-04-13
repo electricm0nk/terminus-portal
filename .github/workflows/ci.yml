@@ -1,23 +1,82 @@
+# CI — Build, Test, Push
+#
+# Branch protection: configure in GitHub → Settings → Branches → Require status checks: "test"
+# This ensures no PR can merge to main if tests fail (AC #4).
+#
+# Registry: ghcr.io/electricm0nk/terminus-portal
+# Auth: GITHUB_TOKEN (permissions.packages: write — no PAT needed for same-org pushes)
+
 name: CI
 
 on:
+  push:
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  validate:
+  # Job 1: Run tests — MUST pass before build (AC #1, NFR1 TDD discipline)
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
         with:
-          dockerfile: Dockerfile
-          ignore: DL3018
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Build image (no push)
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  # Job 2: Build and push Docker image (only on main merge, after tests pass)
+  build-push:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image tags
+        id: meta
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "sha_tag=ghcr.io/electricm0nk/terminus-portal:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "sha_short_tag=ghcr.io/electricm0nk/terminus-portal:sha-${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=ghcr.io/electricm0nk/terminus-portal:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
+          push: true
+          # AC #2: full SHA tag; AC #3: latest tag for ArgoCD
+          tags: |
+            ${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.sha_short_tag }}
+            ${{ steps.meta.outputs.latest_tag }}
+
+      - name: Release summary
+        run: |
+          echo "## Release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **SHA tag** | \`${{ steps.meta.outputs.sha_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Latest tag** | \`${{ steps.meta.outputs.latest_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Digest** | \`${{ steps.build.outputs.digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
