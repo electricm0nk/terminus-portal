@@ -1,5 +1,7 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
+import ThemeToggle from './ThemeToggle.jsx';
+import RefreshButton from './RefreshButton.jsx';
 
 export default function Header({
   onlineCount = 0,
@@ -50,7 +52,10 @@ export default function Header({
         )}
       </div>
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-        {/* Controls slot — filled in Story 5.3 */}
+        <ThemeToggle />
+        {onRefresh !== null && (
+          <RefreshButton onRefresh={onRefresh} isPolling={isPolling} />
+        )}
       </div>
     </header>
   );

@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
 import Header from './components/Header.jsx';
-import ThemeToggle from './components/ThemeToggle.jsx';
-import RefreshButton from './components/RefreshButton.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import { SERVICES } from './config/services.js';
 import { STATUS } from './constants/status.js';
@@ -93,9 +91,8 @@ function App() {
         unreachableCount={unreachableCount}
         lastChecked={lastChecked}
         isPolling={isPolling}
+        onRefresh={handleRefresh}
       />
-      <ThemeToggle />
-      <RefreshButton onRefresh={handleRefresh} isPolling={isPolling} />
       <ServiceGrid services={SERVICES} statusMap={statusMap} />
     </div>
   );
