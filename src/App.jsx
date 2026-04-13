@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
-import ServiceCard from './components/ServiceCard.jsx';
+import ServiceGrid from './components/ServiceGrid.jsx';
 import { SERVICES } from './config/services.js';
 
 function App() {
@@ -27,11 +27,7 @@ function App() {
         />
       )}
       <ThemeToggle />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', padding: '1rem' }}>
-        {SERVICES.map((s) => (
-          <ServiceCard key={s.id} service={s} />
-        ))}
-      </div>
+      <ServiceGrid services={SERVICES} statusMap={{}} />
     </div>
   );
 }
