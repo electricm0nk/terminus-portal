@@ -1,11 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import { SERVICES } from './config/services.js';
+import { STATUS } from './constants/status.js';
+
+function buildInitialStatusMap() {
+  return SERVICES.reduce((acc, s) => {
+    acc[s.id] = s.healthCheck.enabled ? STATUS.CHECKING : STATUS.NO_CHECK;
+    return acc;
+  }, {});
+}
+
+async function checkOne(service) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 5000);
+  try {
+    await fetch(service.healthCheck.url, { signal: controller.signal, mode: 'no-cors' });
+    return { id: service.id, status: STATUS.ONLINE };
+  } catch {
+    return { id: service.id, status: STATUS.UNREACHABLE };
+  } finally {
+    clearTimeout(t);
+  }
+}
 
 function App() {
   const { tokens } = useTheme();
+  const [statusMap, setStatusMap] = useState(buildInitialStatusMap);
+  const [isPolling, setIsPolling] = useState(false);
+  const [lastChecked, setLastChecked] = useState(null);
+
+  const checkAllServices = useCallback(async () => {
+    setIsPolling(true);
+    const enabled = SERVICES.filter((s) => s.healthCheck.enabled);
+    const results = await Promise.allSettled(enabled.map(checkOne));
+    setStatusMap((prev) => {
+      const next = { ...prev };
+      for (const r of results) {
+        if (r.status === 'fulfilled') next[r.value.id] = r.value.status;
+        else if (r.reason?.id) next[r.reason.id] = STATUS.UNREACHABLE;
+      }
+      return next;
+    });
+    setLastChecked(new Date());
+    setIsPolling(false);
+  }, []);
+
+  useEffect(() => {
+    checkAllServices();
+    const id = setInterval(checkAllServices, 30000);
+    return () => clearInterval(id);
+  }, [checkAllServices]);
 
   return (
     <div className="app" style={{ background: tokens.bg, color: tokens.text, minHeight: '100vh' }}>
@@ -27,7 +73,7 @@ function App() {
         />
       )}
       <ThemeToggle />
-      <ServiceGrid services={SERVICES} statusMap={{}} />
+      <ServiceGrid services={SERVICES} statusMap={statusMap} />
     </div>
   );
 }
