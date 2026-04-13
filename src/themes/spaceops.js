@@ -13,7 +13,7 @@ const spaceops = {
   statusOnline: '#4ade80',
   statusUnreachable: '#f87171',
   statusChecking: '#fbbf24',
-  statusNoCheck: '#4b6480',
+  statusNoCheck: '#6e92b5',
   fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
   scanlines: false,
 };

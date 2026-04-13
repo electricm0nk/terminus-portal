@@ -44,7 +44,8 @@ export default function ServiceCard({ service, status }) {
       <div
         data-testid={`service-card-${service.id}`}
         tabIndex={-1}
-        style={{ ...cardStyle, opacity: 0.5 }}
+        aria-disabled="true"
+        style={{ ...cardStyle, borderStyle: 'dashed', borderColor: tokens.border }}
       >
         {content}
         <span style={{ color: tokens.textMuted, fontSize: '0.75rem' }}>PENDING</span>

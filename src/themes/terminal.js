@@ -13,7 +13,7 @@ const terminal = {
   statusOnline: '#00ff41',
   statusUnreachable: '#ff3333',
   statusChecking: '#ffaa00',
-  statusNoCheck: '#557755',
+  statusNoCheck: '#6aaa6a',
   fontFamily: "'Courier New', Courier, monospace",
   scanlines: true,
 };
