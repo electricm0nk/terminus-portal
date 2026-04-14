@@ -19,23 +19,70 @@ on:
   pull_request:
     types: [closed]
     branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Base branch context to release (develop=dev, main=prod)
+        required: true
+        default: develop
+        type: choice
+        options:
+          - develop
+          - main
+      image_sha:
+        description: Optional override for image SHA/tag
+        required: false
+        type: string
 
 permissions:
   contents: read
   packages: write
 
 jobs:
+  resolve:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.map.outputs.env }}
+      values_file: ${{ steps.map.outputs.values_file }}
+      release_sha: ${{ steps.map.outputs.release_sha }}
+    steps:
+      - name: Map branch to release context
+        id: map
+        run: |
+          BASE_REF="${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.base_ref }}"
+          if [[ "${BASE_REF}" == "main" ]]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+            echo "values_file=values.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=dev" >> "$GITHUB_OUTPUT"
+            echo "values_file=values-dev.yaml" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -n "${{ inputs.image_sha || '' }}" ]]; then
+            echo "release_sha=${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${BASE_REF}" == "main" ]]; then
+            echo "release_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-push:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    needs: resolve
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.meta.outputs.sha }}
+    env:
+      SHA: ${{ needs.resolve.outputs.release_sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
 
       - name: Extract short SHA
         id: meta
-        run: echo "sha=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+        run: echo "sha=${SHA::8}" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -51,24 +98,17 @@ jobs:
           push: true
           # Full SHA tag used by Temporal ImageTag; latest kept for manual pulls
           tags: |
-            ghcr.io/electricm0nk/terminus-portal:${{ github.sha }}
+            ghcr.io/electricm0nk/terminus-portal:${{ env.SHA }}
             ghcr.io/electricm0nk/terminus-portal:latest
 
   promote-and-release:
-    needs: build-and-push
+    needs: [resolve, build-and-push]
     runs-on: [self-hosted, trantor-internal]
+    env:
+      ENV: ${{ needs.resolve.outputs.env }}
+      VALUES_FILE: ${{ needs.resolve.outputs.values_file }}
+      SHA: ${{ needs.resolve.outputs.release_sha }}
     steps:
-      - name: Determine environment
-        id: env
-        run: |
-          if [[ "${{ github.base_ref }}" == "main" ]]; then
-            echo "env=prod" >> $GITHUB_OUTPUT
-            echo "values_file=values.yaml" >> $GITHUB_OUTPUT
-          else
-            echo "env=dev" >> $GITHUB_OUTPUT
-            echo "values_file=values-dev.yaml" >> $GITHUB_OUTPUT
-          fi
-
       - name: Promote image tag in terminus.infra
         run: |
           # INFRA_DEPLOY_KEY is injected as an environment variable by the k3s runner pod
@@ -76,11 +116,11 @@ jobs:
           git clone https://x-access-token:${INFRA_DEPLOY_KEY}@github.com/electricm0nk/terminus.infra.git
           cd terminus.infra
           git checkout main
-          sed -i "s/tag:.*/tag: ${{ github.sha }}/" platforms/k3s/helm/terminus-portal/${{ steps.env.outputs.values_file }}
+          sed -i "s/tag:.*/tag: ${SHA}/" platforms/k3s/helm/terminus-portal/${VALUES_FILE}
           git config user.email "ci@trantor.internal"
           git config user.name "Terminus CI"
-          git add platforms/k3s/helm/terminus-portal/${{ steps.env.outputs.values_file }}
-          git commit -m "chore(release): promote terminus-portal:${{ needs.build-and-push.outputs.sha }} to ${{ steps.env.outputs.env }}"
+          git add platforms/k3s/helm/terminus-portal/${VALUES_FILE}
+          git commit -m "chore(release): promote terminus-portal:${{ needs.build-and-push.outputs.sha }} to ${ENV}"
           git push
 
       - name: Start Temporal ReleaseWorkflow
@@ -95,6 +135,6 @@ jobs:
             --namespace default \
             --task-queue terminus-platform \
             --type ReleaseWorkflow \
-            --workflow-id "release-terminus-portal-${{ steps.env.outputs.env }}-${{ needs.build-and-push.outputs.sha }}" \
+            --workflow-id "release-terminus-portal-${ENV}-${{ needs.build-and-push.outputs.sha }}" \
             --id-reuse-policy AllowDuplicateFailedOnly \
-            --input '{"ServiceName":"terminus-portal","Environment":"${{ steps.env.outputs.env }}","ProvisionDB":false,"ImageTag":"${{ github.sha }}"}'
+            --input '{"ServiceName":"terminus-portal","Environment":"${ENV}","ProvisionDB":false,"ImageTag":"${SHA}"}'
