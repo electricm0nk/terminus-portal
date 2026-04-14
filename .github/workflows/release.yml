@@ -67,6 +67,14 @@ jobs:
             echo "release_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
+          if [[ -n "${{ inputs.image_sha || '' }}" ]]; then
+            echo "release_sha=${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${BASE_REF}" == "main" ]]; then
+            echo "release_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-push:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     needs: resolve
