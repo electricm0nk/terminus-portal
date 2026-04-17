@@ -46,7 +46,7 @@ spec:
             - --nginx.scrape-uri=http://localhost/nginx_status
           ports:
             - name: metrics
-              containerPort: 9090
+              containerPort: 9113
               protocol: TCP
           livenessProbe:
             httpGet:
