@@ -13,5 +13,6 @@ metadata:
     app.kubernetes.io/part-of: terminus-portal
     terminus.io/domain: terminus
     terminus.io/service: portal
+    observability.terminus.io/scrape: "true"
   annotations:
     argocd.argoproj.io/sync-wave: "1"
