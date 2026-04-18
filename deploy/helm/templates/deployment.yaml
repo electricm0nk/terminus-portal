@@ -40,6 +40,28 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        - name: nginx-exporter
+          image: "{{ .Values.metricsExporter.image.repository }}:{{ .Values.metricsExporter.image.tag }}"
+          args:
+            - --nginx.scrape-uri=http://localhost/nginx_status
+          ports:
+            - name: metrics
+              containerPort: 9113
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.metricsExporter.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
