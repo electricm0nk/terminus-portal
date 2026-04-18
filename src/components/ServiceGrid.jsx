@@ -2,13 +2,14 @@ import React from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import ServiceCard from './ServiceCard.jsx';
 
-const CATEGORY_ORDER = ['infra', 'platform', 'data', 'ai', 'app'];
+const CATEGORY_ORDER = ['infra', 'platform', 'data', 'ai', 'monitoring', 'app'];
 
 const CATEGORY_LABELS = {
   infra: 'INFRASTRUCTURE',
   platform: 'PLATFORM',
   data: 'DATA',
   ai: 'AI',
+  monitoring: 'MONITORING',
   app: 'APPLICATIONS',
 };
 
