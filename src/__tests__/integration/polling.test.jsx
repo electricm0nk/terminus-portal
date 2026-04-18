@@ -46,13 +46,14 @@ describe('App polling integration', () => {
     });
   });
 
-  it('Fourdogs card shows NO_CHECK (healthCheck.enabled: false — fetch never called for it)', async () => {
+  it('Fourdogs card shows ONLINE when fetch resolves (healthCheck enabled)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ type: 'opaque' }));
     wrap(<App />);
     const fourdogsCard = document.querySelector('[data-testid="service-card-fourdogs"]');
-    // fourdogs shows NO_CHECK immediately (no fetch needed)
-    expect(
-      within(fourdogsCard).getByRole('status', { name: 'Status: No health check' })
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        within(fourdogsCard).getByRole('status', { name: 'Status: Online' })
+      ).toBeInTheDocument();
+    });
   });
 });
