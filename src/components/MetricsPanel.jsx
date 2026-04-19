@@ -10,7 +10,9 @@ export default function MetricsPanel({ metrics }) {
       aria-label="Platform Metrics"
       style={{
         padding: '1rem',
-        background: tokens.bgPage,
+        background: tokens.bgSurface,
+        border: `1px solid ${tokens.border}`,
+        borderRadius: '16px',
       }}
     >
       <h2
