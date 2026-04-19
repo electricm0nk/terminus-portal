@@ -3,6 +3,7 @@ import { useTheme } from './context/ThemeContext.jsx';
 import Header from './components/Header.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
+import GitHubActionsPanel from './components/GitHubActionsPanel.jsx';
 import { SERVICES } from './config/services.js';
 import { METRICS } from './config/metrics.js';
 import { STATUS } from './constants/status.js';
@@ -69,8 +70,34 @@ function App() {
   const unreachableCount = Object.values(statusMap).filter((s) => s === STATUS.UNREACHABLE).length;
 
   return (
-    <div className="app" style={{ background: tokens.bg, color: tokens.text, minHeight: '100vh' }}>
-      <style>{`:focus-visible { outline: 2px solid ${tokens.borderActive} !important; outline-offset: 2px; }`}</style>
+    <div
+      className="app"
+      style={{
+        background: tokens.bg,
+        color: tokens.text,
+        minHeight: '100vh',
+        padding: '1rem',
+      }}
+    >
+      <style>{`
+        :focus-visible { outline: 2px solid ${tokens.borderActive} !important; outline-offset: 2px; }
+        .dashboard-shell {
+          display: grid;
+          grid-template-columns: minmax(0, 2.2fr) minmax(320px, 1fr);
+          gap: 1rem;
+          align-items: start;
+          margin-top: 1rem;
+        }
+        .dashboard-side {
+          display: grid;
+          gap: 1rem;
+        }
+        @media (max-width: 1100px) {
+          .dashboard-shell {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
       {tokens.scanlines && (
         <div
           className="scanlines-overlay"
@@ -96,8 +123,13 @@ function App() {
         isPolling={isPolling}
         onRefresh={handleRefresh}
       />
-      <ServiceGrid services={SERVICES} statusMap={statusMap} />
-      <MetricsPanel metrics={METRICS} />
+      <main className="dashboard-shell">
+        <ServiceGrid services={SERVICES} statusMap={statusMap} />
+        <div className="dashboard-side">
+          <MetricsPanel metrics={METRICS} />
+          <GitHubActionsPanel />
+        </div>
+      </main>
     </div>
   );
 }
