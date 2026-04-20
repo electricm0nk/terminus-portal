@@ -145,4 +145,4 @@ jobs:
             --type ReleaseWorkflow \
             --workflow-id "release-terminus-portal-${ENV}-${{ needs.build-and-push.outputs.sha }}" \
             --id-reuse-policy AllowDuplicateFailedOnly \
-            --input '{"ServiceName":"terminus-portal","Environment":"${ENV}","ProvisionDB":false,"ImageTag":"${SHA}"}'
+            --input '{"ServiceName":"terminus-portal","Environment":"${ENV}","BootstrapDB":false,"ImageTag":"${SHA}"}'
