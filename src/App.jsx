@@ -6,6 +6,7 @@ import ServiceGrid from './components/ServiceGrid.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
 import GitHubActionsPanel from './components/GitHubActionsPanel.jsx';
 import ReleasePipelineTab from './components/ReleasePipelineTab.jsx';
+import PodsTab from './components/PodsTab.jsx';
 import { SERVICES } from './config/services.js';
 import { METRICS } from './config/metrics.js';
 import { STATUS } from './constants/status.js';
@@ -143,7 +144,7 @@ function App() {
       )}
       {activeTab === 'pods' && (
         <main role="tabpanel" id="tabpanel-pods" aria-labelledby="tab-pods" style={{ padding: '2rem 0', color: tokens.textMuted, fontFamily: tokens.fontFamily }}>
-          Pods — coming soon
+          <PodsTab />
         </main>
       )}
       <footer style={{ marginTop: '1.5rem', textAlign: 'right', fontSize: '0.7rem', color: tokens.textMuted, fontFamily: tokens.fontFamily }}>
