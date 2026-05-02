@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { GITHUB_ACTIONS_REPOS } from '../config/githubActions.js';
 
-const GITHUB_API = 'https://api.github.com';
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function summarizeRuns(runs) {
@@ -36,7 +35,8 @@ function displayRunState(run) {
 }
 
 async function fetchRepoRuns(repoConfig) {
-  const response = await fetch(`${GITHUB_API}/repos/${repoConfig.repo}/actions/runs?per_page=8`);
+  const [repoOwner, repoName] = repoConfig.repo.split('/');
+  const response = await fetch(`/api/github/repos/${repoOwner}/${repoName}/actions/runs?per_page=8`);
   if (!response.ok) {
     throw new Error(`${repoConfig.repo}: ${response.status} ${response.statusText}`);
   }
