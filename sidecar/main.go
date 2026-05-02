@@ -19,6 +19,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/healthz", handlers.HealthHandler(logger))
+	mux.Handle("GET /api/github/repos/{owner}/{repo}/branches/{branch}", handlers.GitHubBranchHandler(logger))
 
 	srv := &http.Server{
 		Addr:         ":8080",
