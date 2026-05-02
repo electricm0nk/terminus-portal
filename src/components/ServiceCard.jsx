@@ -26,6 +26,8 @@ export default function ServiceCard({ service, status }) {
     textDecoration: 'none',
     borderRadius: '14px',
     minHeight: '100%',
+    minWidth: 0,
+    overflow: 'hidden',
   };
 
   const content = (
