@@ -289,3 +289,67 @@ func relativeAge(t time.Time) string {
 	}
 	return fmt.Sprintf("%dd ago", int(delta.Hours()/24))
 }
+
+// GitHubActionsRunsHandler handles GET /api/github/repos/{owner}/{repo}/actions/runs
+// It proxies GitHub Actions workflow runs using GITHUB_PAT, enabling access to private repos.
+func GitHubActionsRunsHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner := r.PathValue("owner")
+		repo := r.PathValue("repo")
+
+		if owner == "" || repo == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing path parameter")
+			return
+		}
+
+		pat := os.Getenv("GITHUB_PAT")
+		client := &http.Client{Timeout: 10 * time.Second}
+
+		perPage := r.URL.Query().Get("per_page")
+		if perPage == "" {
+			perPage = "8"
+		}
+
+		url := fmt.Sprintf("https://api.github.com/repos/%s/%s/actions/runs?per_page=%s", owner, repo, perPage)
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "request build error")
+			return
+		}
+		setGitHubHeaders(req, pat)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			logger.Error("GitHub actions runs fetch failed", "owner", owner, "repo", repo, "err", err.Error())
+			writeJSONError(w, http.StatusBadGateway, "upstream error")
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusNotFound {
+			writeJSONError(w, http.StatusNotFound, "repo not found")
+			return
+		}
+		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+			logger.Error("GitHub actions runs access denied", "owner", owner, "repo", repo, "status", resp.StatusCode)
+			writeJSONError(w, http.StatusForbidden, "GitHub access denied")
+			return
+		}
+		if resp.StatusCode != http.StatusOK {
+			logger.Error("GitHub actions runs unexpected status", "owner", owner, "repo", repo, "status", resp.StatusCode)
+			writeJSONError(w, http.StatusBadGateway, "upstream error")
+			return
+		}
+
+		// Stream response body as-is — same JSON shape the SPA expects ({workflow_runs: [...]})
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+		if err != nil {
+			writeJSONError(w, http.StatusBadGateway, "read error")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}
+}

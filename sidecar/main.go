@@ -20,6 +20,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/healthz", handlers.HealthHandler(logger))
 	mux.Handle("GET /api/github/repos/{owner}/{repo}/branches/{branch}", handlers.GitHubBranchHandler(logger))
+	mux.Handle("GET /api/github/repos/{owner}/{repo}/actions/runs", handlers.GitHubActionsRunsHandler(logger))
 	mux.Handle("GET /api/k8s/pods", handlers.K8sPodsHandler(logger))
 	mux.Handle("GET /api/k8s/pods/all", handlers.K8sPodsHandler(logger))
 	mux.Handle("GET /api/metrics/query", handlers.MetricsQueryHandler(logger))

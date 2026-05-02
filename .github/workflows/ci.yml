@@ -16,7 +16,7 @@ on:
     branches: [main, develop]
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -57,9 +57,12 @@ jobs:
         id: meta
         run: |
           SHA_SHORT=$(git rev-parse --short HEAD)
+          APP_VERSION=$(node -p "require('./package.json').version")
           echo "sha_tag=ghcr.io/electricm0nk/terminus-portal:${{ github.sha }}" >> "$GITHUB_OUTPUT"
           echo "sha_short_tag=ghcr.io/electricm0nk/terminus-portal:sha-${SHA_SHORT}" >> "$GITHUB_OUTPUT"
           echo "latest_tag=ghcr.io/electricm0nk/terminus-portal:latest" >> "$GITHUB_OUTPUT"
+          echo "version_tag=ghcr.io/electricm0nk/terminus-portal:v${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "app_version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
         id: build
@@ -67,10 +70,13 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            VITE_APP_VERSION=${{ steps.meta.outputs.app_version }}
           # AC #2: full SHA tag; AC #3: latest tag for ArgoCD
           tags: |
             ${{ steps.meta.outputs.sha_tag }}
             ${{ steps.meta.outputs.sha_short_tag }}
+            ${{ steps.meta.outputs.version_tag }}
             ${{ steps.meta.outputs.latest_tag }}
 
       - name: Release summary
@@ -78,9 +84,18 @@ jobs:
           echo "## Release Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "| | |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Version** | \`v${{ steps.meta.outputs.app_version }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| **SHA tag** | \`${{ steps.meta.outputs.sha_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| **Latest tag** | \`${{ steps.meta.outputs.latest_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| **Digest** | \`${{ steps.build.outputs.digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.app_version }}
+          name: v${{ steps.meta.outputs.app_version }}
+          generate_release_notes: true
+          make_latest: true
 
   # Job 3: Build and push sidecar image (portal4 story 2-02)
   # Builds the Go sidecar from sidecar/Dockerfile.
