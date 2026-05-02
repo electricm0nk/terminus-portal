@@ -37,6 +37,27 @@ metricsExporter:
       cpu: 50m
       memory: 32Mi
 
+sidecar:
+  image:
+    repository: ghcr.io/electricm0nk/terminus-portal-sidecar
+    tag: "latest"  # CI overrides with GITHUB_SHA on merge
+  port: 8080
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+prometheus:
+  # URL of the Prometheus instance accessible from within the cluster
+  url: "https://prometheus.trantor.internal"
+  # PEM-encoded internal CA certificate for TLS verification.
+  # If empty, no ConfigMap is created and the sidecar will log a warning.
+  # Replace with the actual CA cert PEM for your cluster.
+  caCertPem: ""

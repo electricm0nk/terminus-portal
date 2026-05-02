@@ -18,6 +18,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      serviceAccountName: portal-sidecar-sa
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -62,6 +63,48 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.metricsExporter.resources | nindent 12 }}
+        - name: portal-sidecar
+          image: "{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag | default "latest" }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: sidecar-http
+              containerPort: {{ .Values.sidecar.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: sidecar-http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: sidecar-http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          env:
+            - name: GITHUB_PAT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-github-pat
+                  key: GITHUB_PAT
+            - name: PROMETHEUS_URL
+              value: {{ .Values.prometheus.url | quote }}
+          {{- if .Values.prometheus.caCertPem }}
+          volumeMounts:
+            - name: prometheus-ca
+              mountPath: /etc/ssl/certs/internal-ca.crt
+              subPath: internal-ca.crt
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.sidecar.resources | nindent 12 }}
+      {{- if .Values.prometheus.caCertPem }}
+      volumes:
+        - name: prometheus-ca
+          configMap:
+            name: {{ include "terminus-portal.fullname" . }}-prometheus-ca
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
