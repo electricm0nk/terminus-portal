@@ -5,6 +5,7 @@ import TabBar from './components/TabBar.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
 import GitHubActionsPanel from './components/GitHubActionsPanel.jsx';
+import FourDogsHealthPanel from './components/FourDogsHealthPanel.jsx';
 import ReleasePipelineTab from './components/ReleasePipelineTab.jsx';
 import PodsTab from './components/PodsTab.jsx';
 import { SERVICES } from './config/services.js';
@@ -133,6 +134,7 @@ function App() {
           <ServiceGrid services={SERVICES} statusMap={statusMap} />
           <div className="dashboard-side">
             <MetricsPanel metrics={METRICS} />
+            <FourDogsHealthPanel />
             <GitHubActionsPanel />
           </div>
         </main>
