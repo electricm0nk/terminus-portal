@@ -70,3 +70,40 @@ describe('ServiceCard — disabled', () => {
     expect(screen.getByText(/pending/i)).toBeInTheDocument();
   });
 });
+
+describe('ServiceCard — devUrl', () => {
+  const serviceWithDevUrl = {
+    id: 'fourdogs',
+    name: 'Fourdogs',
+    description: 'Pet supply ops',
+    domain: 'Fourdogs',
+    service: 'Central',
+    category: 'app',
+    url: 'https://fourdogs-central.trantor.internal',
+    devUrl: 'https://central-dev.fourdogspetsupplies.com/login',
+    iconSlug: '',
+    healthCheck: { url: '', enabled: false },
+    enabled: true,
+  };
+
+  it('renders Prod and Dev links when devUrl is present', () => {
+    wrap(<ServiceCard service={serviceWithDevUrl} />);
+    const links = screen.getAllByRole('link');
+    const hrefs = links.map((l) => l.getAttribute('href'));
+    expect(hrefs).toContain('https://fourdogs-central.trantor.internal');
+    expect(hrefs).toContain('https://central-dev.fourdogspetsupplies.com/login');
+  });
+
+  it('dev link opens in new tab with noopener noreferrer', () => {
+    wrap(<ServiceCard service={serviceWithDevUrl} />);
+    const devLink = screen.getByRole('link', { name: /dev/i });
+    expect(devLink).toHaveAttribute('target', '_blank');
+    expect(devLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('does not render the outer container as a single <a>', () => {
+    const { container } = wrap(<ServiceCard service={serviceWithDevUrl} />);
+    const card = container.querySelector('[data-testid="service-card-fourdogs"]');
+    expect(card.tagName).toBe('DIV');
+  });
+});
