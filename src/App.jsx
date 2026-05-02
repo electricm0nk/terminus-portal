@@ -5,6 +5,7 @@ import TabBar from './components/TabBar.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
 import GitHubActionsPanel from './components/GitHubActionsPanel.jsx';
+import ReleasePipelineTab from './components/ReleasePipelineTab.jsx';
 import { SERVICES } from './config/services.js';
 import { METRICS } from './config/metrics.js';
 import { STATUS } from './constants/status.js';
@@ -137,7 +138,7 @@ function App() {
       )}
       {activeTab === 'release-pipeline' && (
         <main role="tabpanel" id="tabpanel-release-pipeline" aria-labelledby="tab-release-pipeline" style={{ padding: '2rem 0', color: tokens.textMuted, fontFamily: tokens.fontFamily }}>
-          Release Pipeline — coming soon
+          <ReleasePipelineTab />
         </main>
       )}
       {activeTab === 'pods' && (
