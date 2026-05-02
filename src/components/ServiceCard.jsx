@@ -89,6 +89,32 @@ export default function ServiceCard({ service, status }) {
     );
   }
 
+  if (service.devUrl) {
+    return (
+      <div data-testid={`service-card-${service.id}`} style={cardStyle}>
+        {content}
+        <div style={{ display: 'flex', gap: '0.75rem', marginTop: 'auto', paddingTop: '0.25rem' }}>
+          <a
+            href={service.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: tokens.accent, fontSize: '0.75rem' }}
+          >
+            Prod ↗
+          </a>
+          <a
+            href={service.devUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: tokens.textMuted, fontSize: '0.75rem' }}
+          >
+            Dev ↗
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <a
       data-testid={`service-card-${service.id}`}

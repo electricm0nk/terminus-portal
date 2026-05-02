@@ -94,6 +94,7 @@ export const SERVICES = [
     service: 'Central',
     category: 'app',
     url: 'https://fourdogs-central.trantor.internal',
+    devUrl: 'https://central-dev.fourdogspetsupplies.com/login',
     iconSlug: '',
     healthCheck: { url: 'https://fourdogs-central.trantor.internal/v1/health', enabled: true },
     enabled: true,
