@@ -81,7 +81,12 @@ spec:
               port: sidecar-http
             initialDelaySeconds: 5
             periodSeconds: 10
-          env: []
+          env:
+            - name: GITHUB_PAT
+              valueFrom:
+                secretKeyRef:
+                  name: portal-github-pat
+                  key: GITHUB_PAT
           resources:
             {{- toYaml .Values.sidecar.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
