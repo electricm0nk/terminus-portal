@@ -11,8 +11,8 @@ import (
 
 // FourDogsHealthResponse is the aggregated health payload returned to the SPA.
 type FourDogsHealthResponse struct {
-	CentralUI   ServiceHealthResult `json:"centralUi"`
-	CentralAPI  ServiceHealthResult `json:"centralApi"`
+	CentralUI    ServiceHealthResult `json:"centralUi"`
+	CentralAPI   ServiceHealthResult `json:"centralApi"`
 	Emailfetcher ServiceHealthResult `json:"emailfetcher"`
 }
 
