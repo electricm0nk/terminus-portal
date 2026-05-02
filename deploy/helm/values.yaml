@@ -53,3 +53,11 @@ sidecar:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+prometheus:
+  # URL of the Prometheus instance accessible from within the cluster
+  url: "https://prometheus.trantor.internal"
+  # PEM-encoded internal CA certificate for TLS verification.
+  # If empty, no ConfigMap is created and the sidecar will log a warning.
+  # Replace with the actual CA cert PEM for your cluster.
+  caCertPem: ""

@@ -88,8 +88,23 @@ spec:
                 secretKeyRef:
                   name: portal-github-pat
                   key: GITHUB_PAT
+            - name: PROMETHEUS_URL
+              value: {{ .Values.prometheus.url | quote }}
+          {{- if .Values.prometheus.caCertPem }}
+          volumeMounts:
+            - name: prometheus-ca
+              mountPath: /etc/ssl/certs/internal-ca.crt
+              subPath: internal-ca.crt
+              readOnly: true
+          {{- end }}
           resources:
             {{- toYaml .Values.sidecar.resources | nindent 12 }}
+      {{- if .Values.prometheus.caCertPem }}
+      volumes:
+        - name: prometheus-ca
+          configMap:
+            name: {{ include "terminus-portal.fullname" . }}-prometheus-ca
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
