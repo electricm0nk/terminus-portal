@@ -37,6 +37,19 @@ metricsExporter:
       cpu: 50m
       memory: 32Mi
 
+sidecar:
+  image:
+    repository: ghcr.io/electricm0nk/terminus-portal-sidecar
+    tag: "latest"  # CI overrides with GITHUB_SHA on merge
+  port: 8080
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
