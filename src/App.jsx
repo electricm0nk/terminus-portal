@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './context/ThemeContext.jsx';
 import Header from './components/Header.jsx';
+import TabBar from './components/TabBar.jsx';
 import ServiceGrid from './components/ServiceGrid.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
 import GitHubActionsPanel from './components/GitHubActionsPanel.jsx';
@@ -30,6 +31,7 @@ async function checkOne(service) {
 
 function App() {
   const { tokens } = useTheme();
+  const [activeTab, setActiveTab] = useState('overview');
   const [statusMap, setStatusMap] = useState(buildInitialStatusMap);
   const [isPolling, setIsPolling] = useState(false);
   const [lastChecked, setLastChecked] = useState(null);
@@ -123,13 +125,29 @@ function App() {
         isPolling={isPolling}
         onRefresh={handleRefresh}
       />
-      <main className="dashboard-shell">
-        <ServiceGrid services={SERVICES} statusMap={statusMap} />
-        <div className="dashboard-side">
-          <MetricsPanel metrics={METRICS} />
-          <GitHubActionsPanel />
-        </div>
-      </main>
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      {activeTab === 'overview' && (
+        <main className="dashboard-shell">
+          <ServiceGrid services={SERVICES} statusMap={statusMap} />
+          <div className="dashboard-side">
+            <MetricsPanel metrics={METRICS} />
+            <GitHubActionsPanel />
+          </div>
+        </main>
+      )}
+      {activeTab === 'release-pipeline' && (
+        <main role="tabpanel" id="tabpanel-release-pipeline" aria-labelledby="tab-release-pipeline" style={{ padding: '2rem 0', color: tokens.textMuted, fontFamily: tokens.fontFamily }}>
+          Release Pipeline — coming soon
+        </main>
+      )}
+      {activeTab === 'pods' && (
+        <main role="tabpanel" id="tabpanel-pods" aria-labelledby="tab-pods" style={{ padding: '2rem 0', color: tokens.textMuted, fontFamily: tokens.fontFamily }}>
+          Pods — coming soon
+        </main>
+      )}
+      <footer style={{ marginTop: '1.5rem', textAlign: 'right', fontSize: '0.7rem', color: tokens.textMuted, fontFamily: tokens.fontFamily }}>
+        {import.meta.env.VITE_APP_VERSION ? `v${import.meta.env.VITE_APP_VERSION}` : ''}
+      </footer>
     </div>
   );
 }
