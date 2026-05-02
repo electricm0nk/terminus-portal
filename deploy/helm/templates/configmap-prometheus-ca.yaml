@@ -1,0 +1,11 @@
+{{- if .Values.prometheus.caCertPem }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "terminus-portal.fullname" . }}-prometheus-ca
+  labels:
+    {{- include "terminus-portal.labels" . | nindent 4 }}
+data:
+  internal-ca.crt: |
+    {{- .Values.prometheus.caCertPem | nindent 4 }}
+{{- end }}
