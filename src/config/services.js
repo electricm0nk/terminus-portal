@@ -75,6 +75,18 @@ export const SERVICES = [
     enabled: true,
   },
   {
+    id: 'temporal',
+    name: 'Temporal',
+    description: 'Workflow orchestration engine',
+    domain: 'Terminus',
+    service: 'Platform',
+    category: 'infra',
+    url: 'https://temporal.trantor.internal',
+    iconSlug: 'temporal',
+    healthCheck: { url: 'https://temporal.trantor.internal', enabled: true },
+    enabled: true,
+  },
+  {
     id: 'fourdogs',
     name: 'Fourdogs',
     description: 'Pet supply operations — orders, suggestions, inventory',
