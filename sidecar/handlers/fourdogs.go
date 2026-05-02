@@ -24,7 +24,7 @@ type ServiceHealthResult struct {
 }
 
 const (
-	fourDogsCentralDefaultURL = "http://fourdogs-central.fourdogs-central.svc.cluster.local"
+	fourDogsCentralDefaultURL = "http://fourdogs-central.fourdogs-central.svc.cluster.local:8080"
 	fourDogsCentralURLEnv     = "FOURDOGS_CENTRAL_URL"
 )
 

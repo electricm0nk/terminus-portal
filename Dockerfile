@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+ARG VITE_APP_VERSION
 RUN npm run build
 
 # ---- Stage 2: Runtime ----
