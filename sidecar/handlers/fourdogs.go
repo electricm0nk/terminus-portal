@@ -31,6 +31,7 @@ type ServiceHealthResult struct {
 	HTTPStatus   int    `json:"httpStatus"`    // 0 when no HTTP round-trip was made
 	Signal       string `json:"signal"`        // human-readable label for the SPA
 	RestartCount int32  `json:"restartCount"`  // pod restart count (0 for HTTP-based probes)
+	PodAge       string `json:"podAge"`        // e.g. "up 9h" — time since pod started (triggers only)
 	LastFetchAge string `json:"lastFetchAge"`  // e.g. "3h ago" — triggers only, empty for HTTP probes
 }
 
@@ -161,14 +162,19 @@ func probePodNamespace(namespace string, logger *slog.Logger) ServiceHealthResul
 
 	// Read last successful fetch time from logs of the ready pod
 	lastFetchAge := ""
+	podAge := ""
 	if readyPod != nil {
 		lastFetchAge = readLastFetchAge(ctx, namespace, readyPod.Name, logger)
+		if readyPod.Status.StartTime != nil {
+			podAge = "up " + relativeAge(readyPod.Status.StartTime.Time)
+		}
 	}
 
 	return ServiceHealthResult{
 		Status:       status,
 		Signal:       "UP",
 		RestartCount: totalRestarts,
+		PodAge:       podAge,
 		LastFetchAge: lastFetchAge,
 	}
 }
