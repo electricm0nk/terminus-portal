@@ -12,9 +12,15 @@ export const GITHUB_ACTIONS_REPOS = [
     actionsUrl: 'https://github.com/electricm0nk/terminus.infra/actions',
   },
   {
-    id: 'lens-config',
-    label: 'Lens',
-    repo: 'electricm0nk/lens.config',
-    actionsUrl: 'https://github.com/electricm0nk/lens.config/actions',
+    id: 'fourdogs-central',
+    label: 'Fourdogs Central',
+    repo: 'electricm0nk/fourdogs-central',
+    actionsUrl: 'https://github.com/electricm0nk/fourdogs-central/actions',
+  },
+  {
+    id: 'fourdogs-kaylee',
+    label: 'Kaylee Agent',
+    repo: 'electricm0nk/fourdogs-kaylee-agent',
+    actionsUrl: 'https://github.com/electricm0nk/fourdogs-kaylee-agent/actions',
   },
 ];
