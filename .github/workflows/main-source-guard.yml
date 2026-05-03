@@ -1,0 +1,21 @@
+name: Main Source Branch Guard
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  require-develop-source:
+    name: develop-only-source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce PR source branch
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "Only pull requests from 'develop' can be merged into 'main'."
+            echo "Current source branch: ${{ github.head_ref }}"
+            exit 1
+          fi
