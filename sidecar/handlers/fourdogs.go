@@ -126,12 +126,16 @@ func probePodNamespace(namespace string, logger *slog.Logger) ServiceHealthResul
 		return ServiceHealthResult{Status: "no-signal", Signal: "list error"}
 	}
 
-	// Only count non-terminating pods
+	// Only count pods that are not terminating and not in a terminal Failed/Succeeded phase
 	var activePods []corev1.Pod
 	for _, p := range podList.Items {
-		if p.DeletionTimestamp == nil {
-			activePods = append(activePods, p)
+		if p.DeletionTimestamp != nil {
+			continue // terminating
 		}
+		if p.Status.Phase == corev1.PodFailed || p.Status.Phase == corev1.PodSucceeded {
+			continue // orphaned terminal pods (e.g. node loss leaving ContainerStatusUnknown)
+		}
+		activePods = append(activePods, p)
 	}
 
 	if len(activePods) == 0 {
