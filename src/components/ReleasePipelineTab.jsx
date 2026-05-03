@@ -2,24 +2,6 @@ import React, { useEffect, useReducer, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { REPOS } from '../config/releasePipeline.js';
 
-// ── CI status display helpers ──────────────────────────────────────────────
-
-const CI_ICON = {
-  success: { icon: '✓', label: 'success' },
-  failure: { icon: '✗', label: 'failure' },
-  pending: { icon: '◌', label: 'pending' },
-  unknown: { icon: '–', label: 'unknown' },
-};
-
-function ciColor(status, tokens) {
-  switch (status) {
-    case 'success': return tokens.statusOnline;
-    case 'failure': return tokens.statusUnreachable;
-    case 'pending': return tokens.statusChecking;
-    default:        return tokens.statusNoCheck;
-  }
-}
-
 function shortSHA(sha) {
   return sha ? sha.slice(0, 7) : '';
 }
@@ -34,7 +16,7 @@ function buildKey(owner, repo, branch) {
   return `${owner}/${repo}/${branch}`;
 }
 
-const INITIAL_STATE = { data: {}, loading: true, error: null };
+const INITIAL_STATE = { data: {}, deployedTags: {}, loading: true, error: null };
 
 function reducer(state, action) {
   switch (action.type) {
@@ -42,6 +24,8 @@ function reducer(state, action) {
       return { ...state, loading: true, error: null };
     case 'SET_ROW':
       return { ...state, data: { ...state.data, [action.key]: action.payload } };
+    case 'SET_DEPLOYED_TAGS':
+      return { ...state, deployedTags: action.payload };
     case 'DONE_LOADING':
       return { ...state, loading: false };
     case 'SET_ERROR':
@@ -74,6 +58,14 @@ export default function ReleasePipelineTab() {
         );
       }
     }
+
+    // Fetch deployed image tags from terminus.infra
+    fetches.push(
+      fetch('/api/infra/deployed-tags')
+        .then((r) => r.json())
+        .then((d) => dispatch({ type: 'SET_DEPLOYED_TAGS', payload: d.tags || {} }))
+        .catch(() => {})
+    );
 
     Promise.allSettled(fetches).then(() => dispatch({ type: 'DONE_LOADING' }));
   }, []);
@@ -129,21 +121,6 @@ export default function ReleasePipelineTab() {
 
   // ── Render helpers ──────────────────────────────────────────────────────
 
-  function renderCICell(rowData) {
-    if (!rowData) return <td style={tdStyle}>—</td>;
-    if (rowData.error) return <td style={{ ...tdStyle, color: tokens.statusUnreachable }}>{rowData.error}</td>;
-    const { ciStatus, ciRunUrl } = rowData;
-    const { icon, label } = CI_ICON[ciStatus] || CI_ICON.unknown;
-    const color = ciColor(ciStatus, tokens);
-    return (
-      <td style={tdStyle}>
-        {ciRunUrl
-          ? <a href={ciRunUrl} style={{ ...linkStyle, color }} target="_blank" rel="noreferrer" title={label}>{icon}</a>
-          : <span style={{ color }}>{icon}</span>}
-      </td>
-    );
-  }
-
   function renderSHACell(owner, repo, rowData) {
     if (!rowData || rowData.error) return <td style={tdStyle}>—</td>;
     const sha7 = shortSHA(rowData.sha);
@@ -158,9 +135,19 @@ export default function ReleasePipelineTab() {
     );
   }
 
-  function renderTagCell(rowData) {
+  function renderReleasedTagCell(rowData) {
     if (!rowData || rowData.error) return <td style={tdStyle}>—</td>;
-    return <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.8rem' }}>{rowData.tag || 'no tag'}</td>;
+    return <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.8rem' }}>{rowData.tag || '—'}</td>;
+  }
+
+  function renderDeployedTagCell(tag) {
+    if (!tag) return <td style={{ ...tdStyle, color: tokens.textMuted }}>—</td>;
+    const short = tag.length > 12 ? tag.slice(0, 12) : tag;
+    return (
+      <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.78rem' }} title={tag}>
+        {short}
+      </td>
+    );
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
@@ -180,11 +167,11 @@ export default function ReleasePipelineTab() {
         <thead>
           <tr>
             <th style={thStyle}>Repo</th>
-            <th style={thStyle}>Tag</th>
+            <th style={thStyle}>Release Tag</th>
             <th style={thStyle}>Dev SHA</th>
-            <th style={thStyle}>Dev CI</th>
+            <th style={thStyle}>Dev Deployed</th>
             <th style={thStyle}>Prod SHA</th>
-            <th style={thStyle}>Prod CI</th>
+            <th style={thStyle}>Prod Deployed</th>
           </tr>
         </thead>
         <tbody>
@@ -193,8 +180,9 @@ export default function ReleasePipelineTab() {
             const prodKey = branches.prod ? buildKey(owner, repo, branches.prod) : null;
             const devData  = devKey  ? state.data[devKey]  : null;
             const prodData = prodKey ? state.data[prodKey] : null;
-            // Use prod tag as the canonical tag row (fallback to dev)
+            // Use prod data as canonical source for the release tag
             const tagSource = prodData || devData;
+            const deployedEntry = state.deployedTags[repo] || {};
 
             return (
               <tr key={`${owner}/${repo}`} data-testid={`row-${repo}`}>
@@ -204,11 +192,11 @@ export default function ReleasePipelineTab() {
                     {displayName}
                   </a>
                 </td>
-                {renderTagCell(tagSource)}
+                {renderReleasedTagCell(tagSource)}
                 {devKey  ? renderSHACell(owner, repo, devData)  : <td style={tdStyle}>—</td>}
-                {devKey  ? renderCICell(devData)                 : <td style={tdStyle}>—</td>}
+                {renderDeployedTagCell(deployedEntry.dev)}
                 {prodKey ? renderSHACell(owner, repo, prodData) : <td style={tdStyle}>—</td>}
-                {prodKey ? renderCICell(prodData)                : <td style={tdStyle}>—</td>}
+                {renderDeployedTagCell(deployedEntry.prod)}
               </tr>
             );
           })}

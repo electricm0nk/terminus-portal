@@ -25,10 +25,10 @@ function wrap(metrics = METRICS) {
 }
 
 describe('MetricsPanel', () => {
-  it('renders exactly 3 MetricCard children (cpu-load, mem-used, pods-running)', () => {
+  it('renders MetricCard for each configured metric', () => {
     wrap();
     const cards = METRICS.map((m) => screen.getByText(m.label));
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(METRICS.length);
   });
 
   it('has a heading containing "PLATFORM METRICS"', () => {
@@ -62,6 +62,7 @@ describe('MetricsPanel', () => {
       if (query && query.includes('node_cpu')) value = '42.56';
       if (query && query.includes('node_memory')) value = '67.3';
       if (query && query.includes('kube_pod')) value = '21';
+      if (query && query.includes('DCGM_FI_DEV_GPU_TEMP')) value = '58';
       return Promise.resolve({
         ok: true,
         json: async () => ({
@@ -72,7 +73,7 @@ describe('MetricsPanel', () => {
     });
     wrap();
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenCalledTimes(4);
     });
   });
 });

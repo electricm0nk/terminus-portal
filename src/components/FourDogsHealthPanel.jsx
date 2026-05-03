@@ -43,12 +43,13 @@ export default function FourDogsHealthPanel() {
   // ── Styles ──────────────────────────────────────────────────────────────
 
   const panelStyle = {
-    padding: '1rem',
-    background: tokens.bgSurface,
-    border: `1px solid ${tokens.border}`,
-    borderRadius: '16px',
+    padding: '0.75rem 0 0 0',
+    background: 'transparent',
+    border: 'none',
+    borderTop: `1px solid ${tokens.border}`,
+    borderRadius: 0,
     fontFamily: tokens.fontFamily,
-    marginTop: '1rem',
+    marginTop: '0.75rem',
   };
   const titleStyle = {
     color: tokens.accent, fontSize: '0.75rem', letterSpacing: '0.1em',
@@ -92,8 +93,7 @@ export default function FourDogsHealthPanel() {
       id: 'emailfetcher',
     });
     rows.push({ label: 'ETailPet Trigger',       ...d.etailpetTrigger,      id: 'etailpet-trigger' });
-    rows.push({ label: 'ETailPet Sales Trigger', ...d.etailpetSalesTrigger, id: 'etailpet-sales-trigger' });
-  }
+    rows.push({ label: 'ETailPet Sales Trigger', ...d.etailpetSalesTrigger, id: 'etailpet-sales-trigger' });  }
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -114,6 +114,11 @@ export default function FourDogsHealthPanel() {
             {row.restartCount > 5 && (
               <span style={{ color: tokens.statusUnreachable, fontSize: '0.75rem' }}>
                 {row.restartCount} restarts ⚠
+              </span>
+            )}
+            {row.lastFetchAge && (
+              <span style={{ color: tokens.textMuted, fontSize: '0.72rem' }}>
+                last fetch {row.lastFetchAge}
               </span>
             )}
             <span style={{ color: statusColor(row.status), fontWeight: '600', fontSize: '0.8rem' }}>
