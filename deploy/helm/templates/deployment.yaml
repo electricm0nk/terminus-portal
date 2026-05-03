@@ -65,7 +65,7 @@ spec:
             {{- toYaml .Values.metricsExporter.resources | nindent 12 }}
         - name: portal-sidecar
           image: "{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag | default "latest" }}"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: sidecar-http
               containerPort: {{ .Values.sidecar.port }}
