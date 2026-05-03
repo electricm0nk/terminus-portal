@@ -66,9 +66,6 @@ export default function PodsTab() {
 
   useEffect(() => {
     fetchPods();
-    // Optional 30s auto-refresh
-    const id = setInterval(fetchPods, 30_000);
-    return () => clearInterval(id);
   }, [fetchPods]);
 
   // ── Styles ──────────────────────────────────────────────────────────────
