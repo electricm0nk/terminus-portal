@@ -111,9 +111,14 @@ export default function FourDogsHealthPanel() {
           style={i === rows.length - 1 ? lastRowStyle : rowStyle}>
           <span style={{ color: tokens.text }}>{row.label}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {row.restartCount > 5 && (
-              <span style={{ color: tokens.statusUnreachable, fontSize: '0.75rem' }}>
-                {row.restartCount} restarts ⚠
+            {row.podAge && (
+              <span style={{ color: tokens.textMuted, fontSize: '0.72rem' }}>
+                {row.podAge}
+              </span>
+            )}
+            {row.restartCount > 0 && (
+              <span style={{ color: row.restartCount > 5 ? tokens.statusUnreachable : tokens.textMuted, fontSize: '0.72rem' }}>
+                {row.restartCount}R{row.restartCount > 5 ? ' ⚠' : ''}
               </span>
             )}
             {row.lastFetchAge && (
