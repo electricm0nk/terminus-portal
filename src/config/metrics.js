@@ -27,4 +27,13 @@ export const METRICS = [
     wired: true,
     value: null,
   },
+  {
+    id: 'gpu-temp',
+    label: 'GPU Temp',
+    unit: '°C',
+    source: 'prometheus',
+    query: 'max(DCGM_FI_DEV_GPU_TEMP)',
+    wired: true,
+    value: null,
+  },
 ];

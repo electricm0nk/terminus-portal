@@ -13,13 +13,11 @@ import (
 
 // BranchResponse is the JSON shape returned to the SPA for a branch status query.
 type BranchResponse struct {
-	Branch   string `json:"branch"`
-	SHA      string `json:"sha"`
-	Message  string `json:"message"`
-	Age      string `json:"age"`
-	Tag      string `json:"tag"`
-	CIStatus string `json:"ciStatus"`
-	CIRunURL string `json:"ciRunUrl"`
+	Branch  string `json:"branch"`
+	SHA     string `json:"sha"`
+	Message string `json:"message"`
+	Age     string `json:"age"`
+	Tag     string `json:"tag"`
 }
 
 // cache entry
@@ -82,17 +80,12 @@ func GitHubBranchHandler(logger *slog.Logger) http.HandlerFunc {
 		// 2. Fetch latest tag for the repo
 		tag := fetchLatestTag(client, pat, owner, repo)
 
-		// 3. Fetch CI status for the commit SHA
-		ciStatus, ciRunURL := fetchCIStatus(client, pat, owner, repo, branchData.SHA)
-
 		resp := BranchResponse{
-			Branch:   branch,
-			SHA:      branchData.SHA,
-			Message:  branchData.Message,
-			Age:      relativeAge(branchData.CommitterDate),
-			Tag:      tag,
-			CIStatus: ciStatus,
-			CIRunURL: ciRunURL,
+			Branch:  branch,
+			SHA:     branchData.SHA,
+			Message: branchData.Message,
+			Age:     relativeAge(branchData.CommitterDate),
+			Tag:     tag,
 		}
 
 		// Store in cache

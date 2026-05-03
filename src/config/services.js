@@ -81,9 +81,9 @@ export const SERVICES = [
     domain: 'Terminus',
     service: 'Platform',
     category: 'infra',
-    url: 'https://temporal.trantor.internal',
+    url: 'https://temporal-ui.trantor.internal/',
     iconSlug: 'temporal',
-    healthCheck: { url: 'https://temporal.trantor.internal', enabled: true },
+    healthCheck: { url: 'https://temporal-ui.trantor.internal/', enabled: true },
     enabled: true,
   },
   {

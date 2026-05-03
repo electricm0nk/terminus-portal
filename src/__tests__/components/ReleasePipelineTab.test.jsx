@@ -18,9 +18,22 @@ const MOCK_BRANCH_DATA = {
   message: 'chore: bump version',
   age: '2h ago',
   tag: 'v1.2.3',
-  ciStatus: 'success',
-  ciRunUrl: 'https://github.com/electricm0nk/terminus-portal/actions/runs/123',
 };
+
+const MOCK_DEPLOYED_TAGS = {
+  tags: {
+    'terminus-portal': { dev: 'c3e870e3337be590', prod: '0f3e77569fa15d4b' },
+  },
+};
+
+function makeFetchMock(branchData = MOCK_BRANCH_DATA, deployedTags = MOCK_DEPLOYED_TAGS) {
+  return vi.fn((url) => {
+    if (url.includes('/api/infra/deployed-tags')) {
+      return Promise.resolve({ json: () => Promise.resolve(deployedTags) });
+    }
+    return Promise.resolve({ json: () => Promise.resolve(branchData) });
+  });
+}
 
 describe('ReleasePipelineTab', () => {
   it('shows loading state before fetch completes', () => {
@@ -30,9 +43,7 @@ describe('ReleasePipelineTab', () => {
   });
 
   it('renders the release pipeline table after fetch', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({ json: () => Promise.resolve(MOCK_BRANCH_DATA) })
-    );
+    global.fetch = makeFetchMock();
     wrap(<ReleasePipelineTab />);
 
     await waitFor(() => {
@@ -41,17 +52,15 @@ describe('ReleasePipelineTab', () => {
 
     // Table headers present
     expect(screen.getByText('Repo')).toBeInTheDocument();
-    expect(screen.getByText('Tag')).toBeInTheDocument();
+    expect(screen.getByText('Release Tag')).toBeInTheDocument();
     expect(screen.getByText('Dev SHA')).toBeInTheDocument();
     expect(screen.getByText('Prod SHA')).toBeInTheDocument();
-    expect(screen.getByText('Dev CI')).toBeInTheDocument();
-    expect(screen.getByText('Prod CI')).toBeInTheDocument();
+    expect(screen.getByText('Dev Deployed')).toBeInTheDocument();
+    expect(screen.getByText('Prod Deployed')).toBeInTheDocument();
   });
 
   it('renders a row for each configured repo', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({ json: () => Promise.resolve(MOCK_BRANCH_DATA) })
-    );
+    global.fetch = makeFetchMock();
     wrap(<ReleasePipelineTab />);
 
     await waitFor(() => {
@@ -63,24 +72,20 @@ describe('ReleasePipelineTab', () => {
     expect(screen.getByTestId('row-terminus-inference-gateway')).toBeInTheDocument();
   });
 
-  it('shows fetch error text in cells when API returns error', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({ json: () => Promise.resolve({ error: 'rate limited' }) })
-    );
+  it('shows dash in cells when branch API returns error', async () => {
+    global.fetch = makeFetchMock({ error: 'not found' }, { tags: {} });
     wrap(<ReleasePipelineTab />);
 
     await waitFor(() => {
       expect(screen.getByRole('table')).toBeInTheDocument();
     });
-    // error text is shown in at least one cell
-    const errorCells = screen.getAllByText('rate limited');
-    expect(errorCells.length).toBeGreaterThan(0);
+    // SHA cells show — for error rows
+    const dashCells = screen.getAllByRole('cell').filter(c => c.textContent === '—');
+    expect(dashCells.length).toBeGreaterThan(0);
   });
 
   it('shows SHA links linking to GitHub commit page', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({ json: () => Promise.resolve(MOCK_BRANCH_DATA) })
-    );
+    global.fetch = makeFetchMock();
     wrap(<ReleasePipelineTab />);
 
     await waitFor(() => {
@@ -97,8 +102,11 @@ describe('ReleasePipelineTab', () => {
 
   it('refresh button triggers re-fetch', async () => {
     let callCount = 0;
-    global.fetch = vi.fn(() => {
+    global.fetch = vi.fn((url) => {
       callCount++;
+      if (url.includes('/api/infra/deployed-tags')) {
+        return Promise.resolve({ json: () => Promise.resolve({ tags: {} }) });
+      }
       return Promise.resolve({ json: () => Promise.resolve(MOCK_BRANCH_DATA) });
     });
     wrap(<ReleasePipelineTab />);
