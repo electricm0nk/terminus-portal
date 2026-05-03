@@ -13,9 +13,11 @@ function renderPanel(props = {}) {
 }
 
 const baseHealth = {
-  centralUi:    { status: 'up',    httpStatus: 200, signal: 'UP' },
-  centralApi:   { status: 'up',    httpStatus: 200, signal: 'UP' },
-  emailfetcher: { status: 'up',    httpStatus: 200, signal: 'UP' },
+  centralUi:            { status: 'up',    httpStatus: 200, signal: 'UP',         restartCount: 0 },
+  centralApi:           { status: 'up',    httpStatus: 200, signal: 'UP',         restartCount: 0 },
+  emailfetcher:         { status: 'up',    httpStatus: 200, signal: 'UP',         restartCount: 0 },
+  etailpetTrigger:      { status: 'up',    httpStatus: 0,   signal: '1/1 running', restartCount: 0 },
+  etailpetSalesTrigger: { status: 'up',    httpStatus: 0,   signal: '1/1 running', restartCount: 0 },
 };
 
 beforeEach(() => {
@@ -36,12 +38,14 @@ describe('FourDogsHealthPanel', () => {
     await waitFor(() => expect(screen.queryByText('Loading…')).toBeNull());
   });
 
-  it('shows UP for all three service rows when health returns up', async () => {
+  it('shows UP for all five service rows when health returns up', async () => {
     renderPanel();
     await waitFor(() => expect(screen.queryByText('Loading…')).toBeNull());
     expect(screen.getByTestId('fdh-row-central-ui')).toBeDefined();
     expect(screen.getByTestId('fdh-row-central-api')).toBeDefined();
     expect(screen.getByTestId('fdh-row-emailfetcher')).toBeDefined();
+    expect(screen.getByTestId('fdh-row-etailpet-trigger')).toBeDefined();
+    expect(screen.getByTestId('fdh-row-etailpet-sales-trigger')).toBeDefined();
   });
 
   it('shows "no signal" for emailfetcher when status is no-signal', async () => {
@@ -58,23 +62,23 @@ describe('FourDogsHealthPanel', () => {
     expect(row.textContent).toContain('no signal');
   });
 
-  it('renders ETailPet trigger rows from pod data', async () => {
-    const pods = [
-      { name: 'trigger-abc', namespace: 'fourdogs-etailpet-trigger', phase: 'Running', ready: true, restartCount: 0 },
-      { name: 'sales-abc', namespace: 'fourdogs-etailpet-sales-trigger', phase: 'Running', ready: true, restartCount: 0 },
-    ];
-    renderPanel({ pods });
+  it('renders ETailPet trigger rows from health response', async () => {
+    renderPanel();
     await waitFor(() => expect(screen.queryByText('Loading…')).toBeNull());
     expect(screen.getByTestId('fdh-row-etailpet-trigger')).toBeDefined();
     expect(screen.getByTestId('fdh-row-etailpet-sales-trigger')).toBeDefined();
     expect(screen.getByTestId('fdh-row-etailpet-trigger').textContent).toContain('1/1 running');
   });
 
-  it('shows restart warning when restartCount > 5', async () => {
-    const pods = [
-      { name: 'trigger-abc', namespace: 'fourdogs-etailpet-trigger', phase: 'Running', ready: true, restartCount: 8 },
-    ];
-    renderPanel({ pods });
+  it('shows restart warning when restartCount > 5 from health response', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...baseHealth,
+        etailpetTrigger: { status: 'up', httpStatus: 0, signal: '1/1 running', restartCount: 8 },
+      }),
+    });
+    renderPanel();
     await waitFor(() => expect(screen.queryByText('Loading…')).toBeNull());
     expect(screen.getByTestId('fdh-row-etailpet-trigger').textContent).toContain('⚠');
   });

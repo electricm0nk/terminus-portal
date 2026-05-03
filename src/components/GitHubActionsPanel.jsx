@@ -38,7 +38,14 @@ async function fetchRepoRuns(repoConfig) {
   const [repoOwner, repoName] = repoConfig.repo.split('/');
   const response = await fetch(`/api/github/repos/${repoOwner}/${repoName}/actions/runs?per_page=8`);
   if (!response.ok) {
-    throw new Error(`${repoConfig.repo}: ${response.status} ${response.statusText}`);
+    // Return an unavailable marker instead of throwing so one inaccessible
+    // repo does not pollute the global error banner — each card shows its own state.
+    return {
+      ...repoConfig,
+      runs: [],
+      summary: { queued: 0, running: 0, failed: 0, success: 0 },
+      fetchError: response.status,
+    };
   }
 
   const data = await response.json();
@@ -148,7 +155,7 @@ export default function GitHubActionsPanel() {
             GITHUB ACTIONS
           </h2>
           <div style={{ color: tokens.textMuted, fontSize: '0.78rem', marginTop: '0.35rem' }}>
-            Public GitHub API view for current repo pipelines. Private repos will need a proxy later.
+            Workflow run status via sidecar proxy. All repos require a valid GITHUB_PAT.
           </div>
         </div>
         <button
@@ -239,11 +246,17 @@ export default function GitHubActionsPanel() {
             >
               <div style={{ color: tokens.accent, fontWeight: 'bold' }}>{repo.label}</div>
               <div style={{ color: tokens.textMuted, fontSize: '0.72rem', marginTop: '0.2rem' }}>{repo.repo}</div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem', fontSize: '0.72rem' }}>
-                <span>Run {repoState?.summary.running ?? 0}</span>
-                <span>Queue {repoState?.summary.queued ?? 0}</span>
-                <span>Fail {repoState?.summary.failed ?? 0}</span>
-              </div>
+              {repoState?.fetchError ? (
+                <div style={{ color: tokens.statusUnreachable, fontSize: '0.72rem', marginTop: '0.75rem' }}>
+                  Unavailable ({repoState.fetchError})
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem', fontSize: '0.72rem' }}>
+                  <span>Run {repoState?.summary.running ?? 0}</span>
+                  <span>Queue {repoState?.summary.queued ?? 0}</span>
+                  <span>Fail {repoState?.summary.failed ?? 0}</span>
+                </div>
+              )}
             </a>
           );
         })}

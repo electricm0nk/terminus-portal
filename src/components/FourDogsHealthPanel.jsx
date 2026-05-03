@@ -16,33 +16,18 @@ function reducer(state, action) {
   }
 }
 
-// ── Pod signal helper ──────────────────────────────────────────────────────
-
-function derivePodSignal(pods, namespace) {
-  if (!pods) return { status: 'unknown', signal: 'no pod data', restartCount: 0 };
-  const nsPods = pods.filter((p) => p.namespace === namespace);
-  if (nsPods.length === 0) return { status: 'no-signal', signal: 'no pod', restartCount: 0 };
-  const running = nsPods.filter((p) => p.phase === 'Running' && p.ready);
-  const totalRestarts = nsPods.reduce((s, p) => s + (p.restartCount || 0), 0);
-  const status = running.length > 0 ? 'up' : 'down';
-  return { status, signal: `${running.length}/${nsPods.length} running`, restartCount: totalRestarts };
-}
-
 // ── Component ──────────────────────────────────────────────────────────────
 
 /**
  * FourDogsHealthPanel — shows live health for the 5 Fourdogs microservices.
- *
- * Props:
- *   pods — optional array of PodSummary from /api/k8s/pods/all (passed from App/PodsTab state)
- *          If absent, the component fetches its own pod data.
+ * All health signals (including etailpet trigger pod status) come from the
+ * sidecar's /api/fourdogs/health endpoint — no client-side pod fetching.
  */
-export default function FourDogsHealthPanel({ pods: podsProp }) {
+export default function FourDogsHealthPanel() {
   const { tokens } = useTheme();
   const [state, dispatch] = useReducer(reducer, { loading: true, error: null, data: null });
-  const [pods, setPods] = React.useState(podsProp || null);
 
-  // Fetch fourdogs-central health (aggregated by sidecar)
+  // Fetch fourdogs-central health (aggregated by sidecar, including trigger pod status)
   const fetchHealth = useCallback(() => {
     dispatch({ type: 'START_LOADING' });
     fetch('/api/fourdogs/health')
@@ -51,19 +36,9 @@ export default function FourDogsHealthPanel({ pods: podsProp }) {
       .catch((e) => dispatch({ type: 'SET_ERROR', error: e.message || 'fetch error' }));
   }, []);
 
-  // Fetch pods independently if not supplied by parent
-  const fetchPods = useCallback(() => {
-    if (podsProp) return; // parent controls pod data
-    fetch('/api/k8s/pods/all')
-      .then((r) => r.json())
-      .then((data) => setPods(Array.isArray(data) ? data : []))
-      .catch(() => setPods([]));
-  }, [podsProp]);
-
   useEffect(() => {
     fetchHealth();
-    fetchPods();
-  }, [fetchHealth, fetchPods]);
+  }, [fetchHealth]);
 
   // ── Styles ──────────────────────────────────────────────────────────────
 
@@ -110,32 +85,15 @@ export default function FourDogsHealthPanel({ pods: podsProp }) {
     const d = state.data;
     rows.push({ label: 'Central UI',    ...d.centralUi,    id: 'central-ui' });
     rows.push({ label: 'Central API',   ...d.centralApi,   id: 'central-api' });
-    // emailfetcher: conditional — 'no-signal' if endpoint absent
     rows.push({
       label: 'Emailfetcher',
       status: d.emailfetcher.status,
       signal: d.emailfetcher.status === 'no-signal' ? 'no signal' : d.emailfetcher.signal,
       id: 'emailfetcher',
     });
+    rows.push({ label: 'ETailPet Trigger',       ...d.etailpetTrigger,      id: 'etailpet-trigger' });
+    rows.push({ label: 'ETailPet Sales Trigger', ...d.etailpetSalesTrigger, id: 'etailpet-sales-trigger' });
   }
-
-  // Etailpet trigger workers — pod-phase signals
-  const triggerSignal      = derivePodSignal(pods, 'fourdogs-etailpet-trigger');
-  const salesTriggerSignal = derivePodSignal(pods, 'fourdogs-etailpet-sales-trigger');
-  rows.push({
-    label: 'ETailPet Trigger',
-    status: triggerSignal.status,
-    signal: triggerSignal.signal,
-    restartCount: triggerSignal.restartCount,
-    id: 'etailpet-trigger',
-  });
-  rows.push({
-    label: 'ETailPet Sales Trigger',
-    status: salesTriggerSignal.status,
-    signal: salesTriggerSignal.signal,
-    restartCount: salesTriggerSignal.restartCount,
-    id: 'etailpet-sales-trigger',
-  });
 
   // ── Render ──────────────────────────────────────────────────────────────
 
