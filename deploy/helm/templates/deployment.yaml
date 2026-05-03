@@ -90,6 +90,13 @@ spec:
                   key: GITHUB_PAT
             - name: PROMETHEUS_URL
               value: {{ .Values.prometheus.url | quote }}
+            - name: ARGOCD_URL
+              value: {{ .Values.argocd.url | quote }}
+            - name: ARGOCD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: portal-argocd-token
+                  key: ARGOCD_TOKEN
           {{- if .Values.prometheus.caCertPem }}
           volumeMounts:
             - name: prometheus-ca

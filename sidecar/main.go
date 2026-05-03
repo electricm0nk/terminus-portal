@@ -25,6 +25,7 @@ func main() {
 	mux.Handle("GET /api/k8s/pods/all", handlers.K8sPodsHandler(logger))
 	mux.Handle("GET /api/metrics/query", handlers.MetricsQueryHandler(logger))
 	mux.Handle("GET /api/fourdogs/health", handlers.FourDogsHealthHandler(logger))
+	mux.Handle("GET /api/argocd/status", handlers.ArgoCDStatusHandler(logger))
 
 	srv := &http.Server{
 		Addr:         ":8080",
