@@ -96,7 +96,7 @@ func InfraDeployedTagsHandler(logger *slog.Logger) http.HandlerFunc {
 // fetchInfraTag retrieves a values file from terminus.infra via GitHub API and
 // extracts the `tag:` line value. Returns empty string on any failure.
 func fetchInfraTag(client *http.Client, pat, filePath string, logger *slog.Logger) string {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s",
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=main",
 		infraOwner, infraRepo, filePath)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
