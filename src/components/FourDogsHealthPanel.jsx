@@ -43,12 +43,13 @@ export default function FourDogsHealthPanel() {
   // ── Styles ──────────────────────────────────────────────────────────────
 
   const panelStyle = {
-    padding: '1rem',
-    background: tokens.bgSurface,
-    border: `1px solid ${tokens.border}`,
-    borderRadius: '16px',
+    padding: '0.75rem 0 0 0',
+    background: 'transparent',
+    border: 'none',
+    borderTop: `1px solid ${tokens.border}`,
+    borderRadius: 0,
     fontFamily: tokens.fontFamily,
-    marginTop: '1rem',
+    marginTop: '0.75rem',
   };
   const titleStyle = {
     color: tokens.accent, fontSize: '0.75rem', letterSpacing: '0.1em',
@@ -92,8 +93,7 @@ export default function FourDogsHealthPanel() {
       id: 'emailfetcher',
     });
     rows.push({ label: 'ETailPet Trigger',       ...d.etailpetTrigger,      id: 'etailpet-trigger' });
-    rows.push({ label: 'ETailPet Sales Trigger', ...d.etailpetSalesTrigger, id: 'etailpet-sales-trigger' });
-  }
+    rows.push({ label: 'ETailPet Sales Trigger', ...d.etailpetSalesTrigger, id: 'etailpet-sales-trigger' });  }
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -111,9 +111,19 @@ export default function FourDogsHealthPanel() {
           style={i === rows.length - 1 ? lastRowStyle : rowStyle}>
           <span style={{ color: tokens.text }}>{row.label}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {row.restartCount > 5 && (
-              <span style={{ color: tokens.statusUnreachable, fontSize: '0.75rem' }}>
-                {row.restartCount} restarts ⚠
+            {row.podAge && (
+              <span style={{ color: tokens.textMuted, fontSize: '0.72rem' }}>
+                {row.podAge}
+              </span>
+            )}
+            {row.restartCount > 0 && (
+              <span style={{ color: row.restartCount > 5 ? tokens.statusUnreachable : tokens.textMuted, fontSize: '0.72rem' }}>
+                {row.restartCount}R{row.restartCount > 5 ? ' ⚠' : ''}
+              </span>
+            )}
+            {row.lastFetchAge && (
+              <span style={{ color: tokens.textMuted, fontSize: '0.72rem' }}>
+                last fetch {row.lastFetchAge}
               </span>
             )}
             <span style={{ color: statusColor(row.status), fontWeight: '600', fontSize: '0.8rem' }}>

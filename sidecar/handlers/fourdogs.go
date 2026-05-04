@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -24,10 +27,12 @@ type FourDogsHealthResponse struct {
 
 // ServiceHealthResult describes a single service's health probe outcome.
 type ServiceHealthResult struct {
-	Status       string `json:"status"`       // "up", "down", "no-signal"
-	HTTPStatus   int    `json:"httpStatus"`   // 0 when no HTTP round-trip was made
-	Signal       string `json:"signal"`       // human-readable label for the SPA
-	RestartCount int32  `json:"restartCount"` // pod restart count (0 for HTTP-based probes)
+	Status       string `json:"status"`        // "up", "down", "no-signal"
+	HTTPStatus   int    `json:"httpStatus"`    // 0 when no HTTP round-trip was made
+	Signal       string `json:"signal"`        // human-readable label for the SPA
+	RestartCount int32  `json:"restartCount"`  // pod restart count (0 for HTTP-based probes)
+	PodAge       string `json:"podAge"`        // e.g. "up 9h" — time since pod started (triggers only)
+	LastFetchAge string `json:"lastFetchAge"`  // e.g. "3h ago" — triggers only, empty for HTTP probes
 }
 
 const (
@@ -104,7 +109,8 @@ func FourDogsHealthHandler(logger *slog.Logger) http.HandlerFunc {
 	}
 }
 
-// probePodNamespace checks pod health in a specific namespace via the k8s API.
+// probePodNamespace checks pod health in a specific namespace via the k8s API
+// and reads the last successful trigger timestamp from pod logs.
 func probePodNamespace(namespace string, logger *slog.Logger) ServiceHealthResult {
 	cs, err := buildK8sClient()
 	if err != nil {
@@ -112,7 +118,7 @@ func probePodNamespace(namespace string, logger *slog.Logger) ServiceHealthResul
 		return ServiceHealthResult{Status: "no-signal", Signal: "k8s unavailable"}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
 	podList, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
@@ -121,31 +127,110 @@ func probePodNamespace(namespace string, logger *slog.Logger) ServiceHealthResul
 		return ServiceHealthResult{Status: "no-signal", Signal: "list error"}
 	}
 
-	if len(podList.Items) == 0 {
+	// Only count pods that are not terminating and not in a terminal Failed/Succeeded phase
+	var activePods []corev1.Pod
+	for _, p := range podList.Items {
+		if p.DeletionTimestamp != nil {
+			continue // terminating
+		}
+		if p.Status.Phase == corev1.PodFailed || p.Status.Phase == corev1.PodSucceeded {
+			continue // orphaned terminal pods (e.g. node loss leaving ContainerStatusUnknown)
+		}
+		activePods = append(activePods, p)
+	}
+
+	if len(activePods) == 0 {
 		return ServiceHealthResult{Status: "no-signal", Signal: "no pods"}
 	}
 
-	total := len(podList.Items)
-	running := 0
+	var readyPod *corev1.Pod
 	var totalRestarts int32
-	for _, p := range podList.Items {
-		if p.Status.Phase == corev1.PodRunning && isPodContainerReady(&p) {
-			running++
-		}
+	for i := range activePods {
+		p := &activePods[i]
 		for _, cst := range p.Status.ContainerStatuses {
 			totalRestarts += cst.RestartCount
+		}
+		if p.Status.Phase == corev1.PodRunning && isPodContainerReady(p) && readyPod == nil {
+			readyPod = p
 		}
 	}
 
 	status := "down"
-	if running > 0 {
+	if readyPod != nil {
 		status = "up"
 	}
+
+	// Read last successful fetch time from logs of the ready pod
+	lastFetchAge := ""
+	podAge := ""
+	if readyPod != nil {
+		lastFetchAge = readLastFetchAge(ctx, namespace, readyPod.Name, logger)
+		if readyPod.Status.StartTime != nil {
+			podAge = "up " + relativeAge(readyPod.Status.StartTime.Time)
+		}
+	}
+
 	return ServiceHealthResult{
 		Status:       status,
-		Signal:       fmt.Sprintf("%d/%d running", running, total),
+		Signal:       "UP",
 		RestartCount: totalRestarts,
+		PodAge:       podAge,
+		LastFetchAge: lastFetchAge,
 	}
+}
+
+// readLastFetchAge reads the last few hundred log lines from a pod and returns
+// the relative age of the most recent trigger_success or fetch_cycle_complete line.
+// Log lines have the format: "2006/01/02 15:04:05 INFO trigger_success ..."
+func readLastFetchAge(ctx context.Context, namespace, podName string, logger *slog.Logger) string {
+	cs, err := buildK8sClient()
+	if err != nil {
+		return ""
+	}
+	tailLines := int64(200)
+	logOpts := &corev1.PodLogOptions{TailLines: &tailLines}
+	req := cs.CoreV1().Pods(namespace).GetLogs(podName, logOpts)
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		logger.Warn("pod log stream failed", "namespace", namespace, "pod", podName, "err", err.Error())
+		return ""
+	}
+	defer stream.Close()
+
+	buf := new(bytes.Buffer)
+	if _, err := io.Copy(buf, stream); err != nil {
+		return ""
+	}
+
+	// Scan lines in reverse to find the most recent success marker
+	lines := strings.Split(buf.String(), "\n")
+	successMarkers := []string{"trigger_success", "fetch_cycle_complete", "rows_upserted"}
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		for _, marker := range successMarkers {
+			if strings.Contains(line, marker) {
+				if t := parseLogTimestamp(line); !t.IsZero() {
+					return relativeAge(t)
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// parseLogTimestamp extracts the timestamp from a log line with the format:
+// "2006/01/02 15:04:05 INFO ..."
+func parseLogTimestamp(line string) time.Time {
+	parts := strings.Fields(line)
+	if len(parts) < 2 {
+		return time.Time{}
+	}
+	ts := parts[0] + " " + parts[1]
+	t, err := time.Parse("2006/01/02 15:04:05", ts)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // isPodContainerReady returns true when the pod's Ready condition is True.

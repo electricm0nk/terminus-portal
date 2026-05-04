@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import ServiceCard from './ServiceCard.jsx';
+import FourDogsHealthPanel from './FourDogsHealthPanel.jsx';
 
 const SECTION_ORDER = ['Terminus::Platform', 'Terminus::AI', 'Fourdogs::Central'];
 
@@ -65,6 +66,7 @@ export default function ServiceGrid({ services, statusMap = {} }) {
               <ServiceCard key={s.id} service={s} status={statusMap[s.id] ?? null} />
             ))}
           </div>
+          {key === 'Fourdogs::Central' && <FourDogsHealthPanel />}
         </section>
           );
         })}
