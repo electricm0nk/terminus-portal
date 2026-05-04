@@ -41,10 +41,25 @@ function phaseColor(phase, tokens) {
   }
 }
 
-function restartColor(count, tokens) {
-  if (count === 0) return tokens.text;
-  if (count <= 5)  return tokens.statusChecking;
-  return tokens.statusUnreachable;
+// uptimeColor signals crashloop risk based on how recently the container (re)started.
+// < 5 min  → red   (actively crashing)
+// < 1 hr   → yellow (recently restarted, watch it)
+// otherwise → normal
+function uptimeColor(secs, tokens) {
+  if (secs === 0) return tokens.textMuted;  // not yet running
+  if (secs < 300)  return tokens.statusUnreachable;  // < 5 min — likely crashlooping
+  if (secs < 3600) return tokens.statusChecking;     // < 1 hr — recent restart
+  return tokens.text;
+}
+
+function formatUptime(secs, restartCount) {
+  if (secs === 0) return '—';
+  let label;
+  if (secs < 60)          label = `${secs}s`;
+  else if (secs < 3600)   label = `${Math.floor(secs / 60)}m`;
+  else if (secs < 86400)  label = `${Math.floor(secs / 3600)}h`;
+  else                    label = `${Math.floor(secs / 86400)}d`;
+  return restartCount > 0 ? `up ${label} (${restartCount}r)` : `up ${label}`;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -137,7 +152,7 @@ export default function PodsTab() {
                 <th style={thStyle}>Pod</th>
                 <th style={thStyle}>Phase</th>
                 <th style={thStyle}>Ready</th>
-                <th style={thStyle}>Restarts</th>
+                <th style={thStyle}>Uptime</th>
                 <th style={thStyle}>Age</th>
                 <th style={thStyle}>Node</th>
               </tr>
@@ -150,11 +165,11 @@ export default function PodsTab() {
                     {pod.phase}
                   </td>
                   <td style={{ ...tdStyle, color: pod.ready ? tokens.statusOnline : tokens.statusUnreachable }}>
-                    {pod.ready ? '✓' : '✗'}
+                    {pod.ready ? '\u2713' : '\u2717'}
                   </td>
-                  <td style={{ ...tdStyle, color: restartColor(pod.restartCount, tokens), fontWeight: pod.restartCount > 5 ? '700' : '400' }}>
-                    {pod.restartCount}
-                    {pod.restartCount > 5 && ' ⚠'}
+                  <td style={{ ...tdStyle, color: uptimeColor(pod.containerUptimeSecs, tokens), fontWeight: pod.containerUptimeSecs > 0 && pod.containerUptimeSecs < 300 ? '700' : '400' }}>
+                    {formatUptime(pod.containerUptimeSecs, pod.restartCount)}
+                    {pod.containerUptimeSecs > 0 && pod.containerUptimeSecs < 300 && ' \u26A0'}
                   </td>
                   <td style={{ ...tdStyle, color: tokens.textMuted }}>{pod.age}</td>
                   <td style={{ ...tdStyle, color: tokens.textMuted, fontSize: '0.75rem' }}>{pod.nodeName}</td>

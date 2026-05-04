@@ -16,13 +16,14 @@ import (
 
 // PodSummary is the sanitised pod shape returned to the SPA.
 type PodSummary struct {
-	Name         string `json:"name"`
-	Namespace    string `json:"namespace"`
-	Phase        string `json:"phase"`
-	Ready        bool   `json:"ready"`
-	RestartCount int32  `json:"restartCount"`
-	Age          string `json:"age"`
-	NodeName     string `json:"nodeName"`
+	Name                string `json:"name"`
+	Namespace           string `json:"namespace"`
+	Phase               string `json:"phase"`
+	Ready               bool   `json:"ready"`
+	RestartCount        int32  `json:"restartCount"`
+	ContainerUptimeSecs int64  `json:"containerUptimeSecs"` // seconds since current container last started; 0 if not running
+	Age                 string `json:"age"`
+	NodeName            string `json:"nodeName"`
 }
 
 // buildK8sClient creates a client from the in-cluster service-account token.
@@ -68,8 +69,16 @@ func K8sPodsHandler(logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
+		// Skip terminal-phase and terminating pods — they inflate counts and
+		// are not actionable from the Pods tab (mirrors fourdogs probePodNamespace filter).
 		summaries := make([]PodSummary, 0, len(podList.Items))
 		for _, p := range podList.Items {
+			if p.DeletionTimestamp != nil {
+				continue // terminating
+			}
+			if p.Status.Phase == corev1.PodFailed || p.Status.Phase == corev1.PodSucceeded {
+				continue // orphaned terminal pods (e.g. evicted, completed jobs)
+			}
 			summaries = append(summaries, summarisePod(&p))
 		}
 
@@ -80,14 +89,27 @@ func K8sPodsHandler(logger *slog.Logger) http.HandlerFunc {
 
 func summarisePod(p *corev1.Pod) PodSummary {
 	return PodSummary{
-		Name:         p.Name,
-		Namespace:    p.Namespace,
-		Phase:        string(p.Status.Phase),
-		Ready:        podReady(p),
-		RestartCount: totalRestarts(p),
-		Age:          relativeAge(p.CreationTimestamp.Time),
-		NodeName:     p.Spec.NodeName,
+		Name:                p.Name,
+		Namespace:           p.Namespace,
+		Phase:               string(p.Status.Phase),
+		Ready:               podReady(p),
+		RestartCount:        totalRestarts(p),
+		ContainerUptimeSecs: containerUptimeSecs(p),
+		Age:                 relativeAge(p.CreationTimestamp.Time),
+		NodeName:            p.Spec.NodeName,
 	}
+}
+
+// containerUptimeSecs returns how long the pod's first running container has
+// been up since its most recent (re)start. Returns 0 when no container is in
+// Running state (pod still initialising or already stopped).
+func containerUptimeSecs(p *corev1.Pod) int64 {
+	for _, cs := range p.Status.ContainerStatuses {
+		if cs.State.Running != nil && !cs.State.Running.StartedAt.IsZero() {
+			return int64(time.Since(cs.State.Running.StartedAt.Time).Seconds())
+		}
+	}
+	return 0
 }
 
 // podReady returns true when every container in the pod reports ready.
