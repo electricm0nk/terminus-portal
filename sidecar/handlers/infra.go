@@ -112,6 +112,7 @@ func fetchInfraTag(client *http.Client, pat, filePath string, logger *slog.Logge
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		logger.Warn("infra values fetch non-200", "path", filePath, "status", resp.StatusCode)
 		return ""
 	}
 
