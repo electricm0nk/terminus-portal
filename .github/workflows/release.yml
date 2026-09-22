@@ -1,17 +1,30 @@
-# release.yml — Terminus Portal Release Pipeline
+# release.yml — Terminus Portal hosted release pipeline
 #
-# Fires when a PR is merged to `develop` (dev release) or `main` (production release).
-# Job 1 (cloud runner): builds and pushes the Docker image to GHCR.
-# Job 2 (self-hosted k3s runner): promotes the image tag to terminus.infra and starts
-# the Temporal ReleaseWorkflow, which gates the ArgoCD sync and smoke test.
+# Migrated from self-hosted ([self-hosted, trantor-internal]) runners to
+# GitHub-hosted ubuntu-latest. Trailblazer pattern: central-mcp-server
+# (see docs/runbooks/hosted-service-onboarding.md).
 #
-# Required secrets:
-#   INFRA_DEPLOY_KEY — GitHub deploy key with write access to terminus.infra repo
+# Flow:
+#   ubuntu-latest -> resolve (env/SHA/infra_branch)
+#                -> build-and-push immutable GHCR image
+#                -> promote-manifest in terminus.infra (with retry)
+#                -> trigger Temporal ReleaseWorkflow over HTTPS via
+#                   ephemeral Tailscale identity; await terminal status.
 #
-# Semaphore project 3 (terminus-infra) activity templates called by Temporal:
-#   seed-terminus-portal-secrets    → no-op GHCR prerequisite check
-#   verify-terminus-portal-deploy   → smoke test (prod)
-#   verify-terminus-portal-dev-deploy → smoke test (dev)
+# Required repository secrets:
+#   INFRA_DEPLOY_KEY    - repo-scoped write token for terminus.infra promotion
+#   TS_OAUTH_CLIENT_ID  - Tailscale OAuth client for tailnet access
+#   TS_OAUTH_SECRET     - Tailscale OAuth secret
+#
+# Notes:
+# - Temporal is reached through the Temporal Web API over HTTPS, not gRPC.
+#   The internal CA is not in the hosted-runner trust store; Tailscale
+#   restricts the connection to the approved tailnet path and the
+#   `--insecure` flag is intentional (lab CA only).
+# - Image tag is the full source SHA. :latest is intentionally not pushed.
+# - Self-hosted runner ([self-hosted, trantor-internal]) is retired by this
+#   change. Follow docs/runbooks/hosted-runner-retirement.md to remove the
+#   runner Deployment, registration, ExternalSecret, RBAC, and credentials.
 
 name: Release
 
@@ -34,6 +47,10 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: release-terminus-portal-${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.base_ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
@@ -45,6 +62,7 @@ jobs:
     outputs:
       env: ${{ steps.map.outputs.env }}
       values_file: ${{ steps.map.outputs.values_file }}
+      infra_branch: ${{ steps.map.outputs.infra_branch }}
       release_sha: ${{ steps.map.outputs.release_sha }}
     steps:
       - name: Map branch to release context
@@ -52,45 +70,32 @@ jobs:
         run: |
           BASE_REF="${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.base_ref }}"
           if [[ "${BASE_REF}" == "main" ]]; then
-            echo "env=prod" >> "$GITHUB_OUTPUT"
+            echo "env=prod"           >> "$GITHUB_OUTPUT"
             echo "values_file=values.yaml" >> "$GITHUB_OUTPUT"
+            echo "infra_branch=main"  >> "$GITHUB_OUTPUT"
           else
-            echo "env=dev" >> "$GITHUB_OUTPUT"
+            echo "env=dev"            >> "$GITHUB_OUTPUT"
             echo "values_file=values-dev.yaml" >> "$GITHUB_OUTPUT"
+            echo "infra_branch=main"  >> "$GITHUB_OUTPUT"
           fi
 
           if [[ -n "${{ inputs.image_sha || '' }}" ]]; then
             echo "release_sha=${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${BASE_REF}" == "main" ]]; then
-            echo "release_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "release_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          fi
-
-          if [[ -n "${{ inputs.image_sha || '' }}" ]]; then
-            echo "release_sha=${{ inputs.image_sha }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${BASE_REF}" == "main" ]]; then
+          elif [[ "${{ github.event_name }}" == "pull_request" && "${BASE_REF}" == "main" ]]; then
             echo "release_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
           else
             echo "release_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
   build-and-push:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     needs: resolve
     runs-on: ubuntu-latest
-    outputs:
-      sha: ${{ steps.meta.outputs.sha }}
     env:
       SHA: ${{ needs.resolve.outputs.release_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.SHA }}
-
-      - name: Extract short SHA
-        id: meta
-        run: echo "sha=${SHA::8}" >> $GITHUB_OUTPUT
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -99,50 +104,174 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push SHA-tagged image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Full SHA tag used by Temporal ImageTag; latest kept for manual pulls
-          tags: |
-            ghcr.io/electricm0nk/terminus-portal:${{ env.SHA }}
-            ghcr.io/electricm0nk/terminus-portal:latest
+          # Immutable tag derived from source SHA only; :latest intentionally
+          # omitted per hosted-service-onboarding.md contract.
+          tags: ghcr.io/electricm0nk/terminus-portal:${{ env.SHA }}
 
-  promote-and-release:
+  promote-manifest:
+    name: Promote manifest in terminus.infra
     needs: [resolve, build-and-push]
-    runs-on: [self-hosted, trantor-internal]
+    runs-on: ubuntu-latest
     env:
+      SERVICE: terminus-portal
       ENV: ${{ needs.resolve.outputs.env }}
-      VALUES_FILE: ${{ needs.resolve.outputs.values_file }}
       SHA: ${{ needs.resolve.outputs.release_sha }}
+      INFRA_BRANCH: ${{ needs.resolve.outputs.infra_branch }}
+      VALUES_FILE: ${{ needs.resolve.outputs.values_file }}
+      TERMINUS_INFRA_TOKEN: ${{ secrets.INFRA_DEPLOY_KEY }}
     steps:
-      - name: Promote image tag in terminus.infra
+      - name: Validate resolved inputs
         run: |
-          # INFRA_DEPLOY_KEY is injected as an environment variable by the k3s runner pod
-          # (actions-runner-infra-deploy-key secret in actions-runner namespace)
-          git clone https://x-access-token:${INFRA_DEPLOY_KEY}@github.com/electricm0nk/terminus.infra.git
+          [[ -n "${ENV}" ]]            || { echo "::error::env is empty"; exit 1; }
+          [[ -n "${SHA}" ]]            || { echo "::error::sha is empty"; exit 1; }
+          [[ -n "${INFRA_BRANCH}" ]]   || { echo "::error::infra_branch is empty"; exit 1; }
+          [[ -n "${TERMINUS_INFRA_TOKEN:-}" ]] || { echo "::error::TERMINUS_INFRA_TOKEN is empty on runner"; exit 1; }
+
+      - name: Promote manifest in terminus.infra
+        run: |
+          git clone https://x-access-token:${TERM....git
           cd terminus.infra
-          git checkout main
-          sed -i "s/tag:.*/tag: ${SHA}/" platforms/k3s/helm/terminus-portal/${VALUES_FILE}
           git config user.email "ci@trantor.internal"
           git config user.name "Terminus CI"
-          git add platforms/k3s/helm/terminus-portal/${VALUES_FILE}
-          git commit -m "chore(release): promote terminus-portal:${{ needs.build-and-push.outputs.sha }} to ${ENV}"
-          git push
+
+          VALUES_PATH="platforms/k3s/helm/${SERVICE}/${VALUES_FILE}"
+          MAX_RETRIES=3
+          PROMOTED=false
+
+          for i in $(seq 1 ${MAX_RETRIES}); do
+            git fetch origin
+            git checkout "${INFRA_BRANCH}"
+            git reset --hard "origin/${INFRA_BRANCH}"
+
+            sed -i "s/^  tag:.*/  tag: ${SHA}/" "${VALUES_PATH}"
+
+            git add "${VALUES_PATH}"
+            if git diff --cached --quiet; then
+              PROMOTED=true
+              break
+            fi
+
+            git commit -m "chore(release): promote ${SERVICE}:${SHA:0:8} to ${ENV}"
+
+            if git push origin "${INFRA_BRANCH}"; then
+              PROMOTED=true
+              break
+            fi
+
+            echo "Push conflict -- retrying (attempt ${i}/${MAX_RETRIES})"
+            git reset --hard HEAD~1
+            sleep 2
+          done
+
+          if [[ "${PROMOTED}" != "true" ]]; then
+            echo "::error::Manifest promotion failed after ${MAX_RETRIES} attempts."
+            exit 1
+          fi
+
+  trigger-temporal-release:
+    name: Trigger Temporal release workflow
+    needs:
+      - resolve
+      - build-and-push
+      - promote-manifest
+    runs-on: ubuntu-latest
+    env:
+      SERVICE: terminus-portal
+      ENV: ${{ needs.resolve.outputs.env }}
+      SHA: ${{ needs.resolve.outputs.release_sha }}
+      TEMPORAL_API_BASE_URL: https://temporal-ui.trantor.internal
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: terminus-platform
+      WORKFLOW_ID: release-terminus-portal-${{ needs.resolve.outputs.env }}-${{ needs.resolve.outputs.release_sha }}
+    steps:
+      - name: Connect to Trantor tailnet
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-actions
 
       - name: Start Temporal ReleaseWorkflow
+        shell: bash
         run: |
-          # Download temporal CLI (runner pod has no kubectl; direct gRPC is cleaner)
-          curl -sL "https://temporal.download/cli/archive/latest?platform=linux&arch=amd64" \
-            -o /tmp/temporal.tar.gz
-          tar -xzf /tmp/temporal.tar.gz -C /tmp/
-          chmod +x /tmp/temporal
-          /tmp/temporal workflow start \
-            --address 10.43.29.119:7233 \
-            --namespace default \
-            --task-queue terminus-platform \
-            --type ReleaseWorkflow \
-            --workflow-id "release-terminus-portal-${ENV}-${{ needs.build-and-push.outputs.sha }}" \
-            --id-reuse-policy AllowDuplicateFailedOnly \
-            --input '{"ServiceName":"terminus-portal","Environment":"${ENV}","ProvisionDB":false,"ImageTag":"${SHA}"}'
+          set -euo pipefail
+          [[ -n "${ENV}" ]] || { echo "::error::env is empty"; exit 1; }
+          [[ -n "${SHA}" ]] || { echo "::error::sha is empty"; exit 1; }
+
+          python3 - <<'PY' > "${RUNNER_TEMP}/temporal-start.json"
+          import base64
+          import json
+          import os
+
+          workflow_input = {
+              "ServiceName": os.environ["SERVICE"],
+              "Environment": os.environ["ENV"],
+              "BootstrapDB": False,
+              "ImageTag": os.environ["SHA"],
+          }
+          payload = json.dumps(workflow_input, separators=(",", ":")).encode()
+          request = {
+              "workflowType": {"name": "ReleaseWorkflow"},
+              "taskQueue": {"name": os.environ["TEMPORAL_TASK_QUEUE"]},
+              "input": {
+                  "payloads": [{
+                      "metadata": {
+                          "encoding": base64.b64encode(b"json/plain").decode(),
+                      },
+                      "data": base64.b64encode(payload).decode(),
+                  }]
+              },
+              "workflowIdReusePolicy": "WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE_FAILED_ONLY",
+          }
+          print(json.dumps(request))
+          PY
+
+          # The lab Temporal UI uses the internal Trantor CA, which is not in the
+          # GitHub-hosted runner trust store. Tailscale restricts this connection
+          # to the approved tailnet path.
+          curl --insecure --fail-with-body --silent --show-error \
+            "${TEMPORAL_API_BASE_URL}/" \
+            --cookie-jar "${RUNNER_TEMP}/temporal-cookies" \
+            --output /dev/null
+          csrf_token=$(awk '$6 == "_csrf" { print $7 }' "${RUNNER_TEMP}/temporal-cookies")
+          [[ -n "${csrf_token}" ]] || { echo "::error::Temporal API did not issue a CSRF cookie"; exit 1; }
+
+          curl --insecure --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -H "X-CSRF-Token: ${csrf_token}" \
+            --cookie "${RUNNER_TEMP}/temporal-cookies" \
+            --data-binary "@${RUNNER_TEMP}/temporal-start.json" \
+            "${TEMPORAL_API_BASE_URL}/api/v1/namespaces/${TEMPORAL_NAMESPACE}/workflows/${WORKFLOW_ID}" \
+            > "${RUNNER_TEMP}/temporal-start-response.json"
+
+          jq -e '.runId // .workflowExecution.workflowId // .workflowId' \
+            "${RUNNER_TEMP}/temporal-start-response.json" >/dev/null
+          echo "Started ${WORKFLOW_ID}"
+
+      - name: Wait for Temporal ReleaseWorkflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 1800))
+          while (( SECONDS < deadline )); do
+            response=$(curl --insecure --fail-with-body --silent --show-error \
+              "${TEMPORAL_API_BASE_URL}/api/v1/namespaces/${TEMPORAL_NAMESPACE}/workflows/${WORKFLOW_ID}")
+            status=$(jq -r '.workflowExecutionInfo.status // .status // empty' <<<"${response}")
+            normalized=$(tr '[:upper:]' '[:lower:]' <<<"${status}")
+            echo "Temporal workflow status: ${status:-unknown}"
+            case "${normalized}" in
+              *completed) exit 0 ;;
+              *failed|*canceled|*terminated|*timed_out)
+                echo "::error::Temporal ReleaseWorkflow ended with status ${status}"
+                exit 1
+                ;;
+            esac
+            sleep 15
+          done
+          echo "::error::Timed out waiting for Temporal ReleaseWorkflow ${WORKFLOW_ID}"
+          exit 1
