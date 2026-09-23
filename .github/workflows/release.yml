@@ -134,7 +134,8 @@ jobs:
 
       - name: Promote manifest in terminus.infra
         run: |
-          git clone 'https://x-access-token:'"${TERMINUS_INFRA_TOKEN}"'.git'
+          printf 'machine github.com\nlogin x-access-token\npassword %s\n' "${TERMINUS_INFRA_TOKEN}" > "${HOME}/.netrc" && chmod 600 "${HOME}/.netrc"
+          git clone https://github.com/electricm0nk/terminus.infra.git
           cd terminus.infra
           git config user.email "ci@trantor.internal"
           git config user.name "Terminus CI"
