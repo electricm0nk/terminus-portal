@@ -134,7 +134,7 @@ jobs:
 
       - name: Promote manifest in terminus.infra
         run: |
-          git clone https://x-access-token:${TERM....git
+          git clone 'https://x-access-token:'"${TERMINUS_INFRA_TOKEN}"'.git'
           cd terminus.infra
           git config user.email "ci@trantor.internal"
           git config user.name "Terminus CI"
